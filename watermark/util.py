@@ -12,7 +12,7 @@ def rgb_to_yiq_matrix(a):
     # use Numpy's matrix calculation backend.
     return scipy.dot(scipy.array([[0.3, 0.59, 0.11],
                                 [0.6, -0.28, -0.32],
-                                [0.21, -0.52, 0.31]]),a.transpose())
+                                [0.21, -0.52, 0.31]]),a)
 
 
 
@@ -25,15 +25,56 @@ def yiq_to_rgb_matrix(a):
                                 [1, -0.276066, -0.639810],
                                 [1, -1.105450, 1.729860]]),a)
     # still have to enforce the limits... method sucks, works for now.
+    print(x.shape)
     min_val = 0
     max_val = 255
     for i in range(0,x.shape[1]):
         x[0,i] = min(max(x[0,i],min_val),max_val)
         x[1,i] = min(max(x[1,i],min_val),max_val)
         x[2,i] = min(max(x[2,i],min_val),max_val)
+    print(x.shape)
     return x
 
 
+
+def rgb_to_yiq_img(indata):
+    inshape = indata.shape
+    
+    r = indata[:,:,0].reshape(-1,1)
+    g = indata[:,:,1].reshape(-1,1)
+    b = indata[:,:,2].reshape(-1,1)
+    
+    rgb = scipy.hstack((r,g,b)).transpose()
+    
+    yiq_data = rgb_to_yiq_matrix(rgb)
+    
+    Y = yiq_data[0,:].reshape(inshape[0],inshape[1])
+    I = yiq_data[1,:].reshape(inshape[0],inshape[1])
+    Q = yiq_data[2,:].reshape(inshape[0],inshape[1])
+    
+    yiq_matr = scipy.dstack((Y,I,Q))
+    
+    #debug_plot(yiq_matr[:,:,0])
+    
+    return yiq_matr
+
+
+def yiq_to_rgb_img(indata):
+    inshape = indata.shape
+    
+    r = indata[:,:,0].reshape(-1,1)
+    g = indata[:,:,1].reshape(-1,1)
+    b = indata[:,:,2].reshape(-1,1)
+    
+    rgb = scipy.hstack((r,g,b)).transpose()
+    yiq_data = yiq_to_rgb_matrix(rgb)
+
+    Y = yiq_data[0,:].reshape(inshape[0],inshape[1])
+    I = yiq_data[1,:].reshape(inshape[0],inshape[1])
+    Q = yiq_data[2,:].reshape(inshape[0],inshape[1])
+    yiq_matr = scipy.dstack((Y,I,Q))
+    
+    return yiq_matr
 
 
 
@@ -43,6 +84,7 @@ def debug_plot(a):
     import matplotlib
     # scale it.
     #scipy.min(a, axis=None), scipy.max(a, axis=None)
-    b = ((a - a.min()) / (a.max() - a.min())) * 255
+    #b = ((a - a.min()) / (a.max() - a.min())) * 255
+    b=a
     plt.imshow(b,cmap = matplotlib.cm.Greys_r)
     plt.show()

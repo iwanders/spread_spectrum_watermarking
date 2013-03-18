@@ -5,9 +5,12 @@ import scipy.fftpack
 import scipy.signal
 from math import sqrt
 from util import rgb_to_yiq_matrix,yiq_to_rgb_matrix
+from util import rgb_to_yiq_img,yiq_to_rgb_img
+
+from util import debug_plot
 
 
-def embed(inputfile, outputfile, watermark, alpha=0.1):
+def embed_file(inputfile, outputfile, watermark, alpha=0.1):
     """
         :parameters:
             inputfile
@@ -20,24 +23,44 @@ def embed(inputfile, outputfile, watermark, alpha=0.1):
                 Specifies how strongly the watermark is embedded. Alpha 0.1 is
                 the default and from the paper.
     """
-    indata = scipy.misc.imread(inputfile).astype('f') #/ 255.0
-    inshape = indata.shape
-    # TODO: handle grayscale images and other then 8 bit.
-
-    # change the grid into a vector of RGB components.
-    indata = indata.reshape(-1,3)
-
-    # Step 1, convert the RGB to YIQ and acquire the Y matrix.
-    # In the second last alinea of  the conclusion
-
-    # this was very slow:
-    #yiq_indata = map(lambda x: colorsys.rgb_to_yiq(*x), indata) # takes long
+    rgb_in = scipy.misc.imread(inputfile)
+    out_rgb = embed(rgb_in,watermark,alpha)
     
-    # equivalent to: (which is very fast, we like fast...)
-    yiq_indata = rgb_to_yiq_matrix(indata)
-    y_indata = yiq_indata[0,:]
+    outdata = (out_rgb).astype('uint8')#
+    #print(outdata.shape)
+
+    # Step 10, write this file.
+    scipy.misc.imsave(outputfile, outdata)
     
-    y_indata = y_indata.reshape(inshape[0],inshape[1]) # reshape back to 2d.
+
+
+def test_file(origfile,suspectfile, watermark,alpha=0.1):
+    """
+    :parameters:
+        suspectfile
+            Filename for with a suspected watermark.
+        origfile
+            Filename to the original file without watermark.
+        watermark
+            Watermark which we are testing.
+    """
+    orig_rgb = scipy.misc.imread(origfile)
+    suspect_rgb = scipy.misc.imread(suspectfile)
+    test(orig_rgb,suspect_rgb, watermark,alpha=0.1)
+
+
+
+def embed(input_rgb, watermark, alpha=0.1):
+    
+    # Step 1, convert RGB TO YIQ and acquire Y.
+    inshape = input_rgb.shape
+    #print("INSHAPE RGB->YIQ:")
+    #print(inshape)
+    yiq_indata = rgb_to_yiq_img(input_rgb)
+    #print(yiq_indata.shape)
+
+    # width x height x Y component matrix.
+    y_indata = yiq_indata[:,:,0]
 
 
     # Step 2, use the acquired Y data to perform a 2 dimensional DCT.
@@ -48,9 +71,10 @@ def embed(inputfile, outputfile, watermark, alpha=0.1):
 
     # Perform the computation.
     in_dct = dct(dct(y_indata).transpose(1,0)).transpose(0,1).transpose(0,1)
-
+    print(in_dct)
     # Step 3, convert these DCT components back to a vector once again.
     in_dctv = in_dct.reshape(1,-1)[0]
+    print(in_dctv)
 
     # Step 4, sort this vector, so we know where the highest components are.
     in_dctv_s = scipy.argsort(in_dctv)
@@ -73,58 +97,34 @@ def embed(inputfile, outputfile, watermark, alpha=0.1):
     # Step 7, perform the inverse of the DCT transform.
     y_outdata = idct(idct(out_dct).transpose(1,0)).transpose(0,1).transpose(0,1)
     
-
     # Step 8, recompose the Y component with its IQ components.
     yiq_outdata = yiq_indata
-    yiq_outdata[0,:] = y_outdata.reshape(1,-1).flatten()
-
-    # Step 9, convert our YIQ Nx3 matrix back to RGB of original size.
-    outdatav = yiq_to_rgb_matrix(yiq_outdata)
-    # reshaping back, stacking the RGB vectors vertically
-    outdata = scipy.dstack((outdatav[0,:],outdatav[1,:],outdatav[2,:]))
+    # overwrite th Y component.
+    yiq_outdata[:,:,0] = y_outdata
     
-    # finally reshape it back into the original dimensions
-    outdata = outdata.reshape(inshape[0],inshape[1],3)
-    #print(outdata)
-    # convert to original type.
-    outdata = (outdata).astype('uint8')#
-    #print(outdata.shape)
+    # Step 9, convert our YIQ Nx3 matrix back to RGB of original size.
+    outdata = yiq_to_rgb_img(yiq_outdata)
+    
 
-    # Step 10, write this file.
-    scipy.misc.imsave(outputfile, outdata)
+    # return it, the embedding process is done.
+    return outdata
 
 
-def test(origfile,suspectfile, watermark,alpha=0.1):
-    """
-    :parameters:
-        suspectfile
-            Filename for with a suspected watermark.
-        origfile
-            Filename to the original file without watermark.
-        watermark
-            Watermark which we are testing.
-    """
+def test(orig_rgb,suspect_rgb, watermark,alpha=0.1):
+
     # define shorthands
     dct = lambda x: scipy.fftpack.dct(x, norm='ortho')
 
-    suspectdata = scipy.misc.imread(suspectfile).astype('f')
-    suspectshape = suspectdata.shape
-    suspectdata = suspectdata.reshape(-1,3)
-    yiq_suspectdata = rgb_to_yiq_matrix(suspectdata)
-    y_suspectdata = yiq_suspectdata[0,:]
-    y_suspectdata = y_suspectdata.reshape(suspectshape[0],suspectshape[1])
+    
+    yiq_suspectdata = rgb_to_yiq_img(suspect_rgb)
+    y_suspectdata = yiq_suspectdata[:,:,0]
     suspect_dct = dct(dct(y_suspectdata).transpose(1,0)).transpose(0,1).transpose(0,1)
     suspect_dctv = suspect_dct.reshape(1,-1)[0]
     suspect_dctv_s = scipy.argsort(suspect_dctv)[::-1]
-    #print(suspect_dctv_s[0:5])
 
 
-    origdata = scipy.misc.imread(origfile).astype('f')
-    origshape = origdata.shape
-    origdata = origdata.reshape(-1,3)
-    yiq_origdata = rgb_to_yiq_matrix(origdata)
-    y_origdata = yiq_origdata[0,:]
-    y_origdata = y_origdata.reshape(origshape[0],origshape[1])
+    yiq_origdata = rgb_to_yiq_img(orig_rgb)
+    y_origdata = yiq_origdata[:,:,0]
     orig_dct = dct(dct(y_origdata).transpose(1,0)).transpose(0,1).transpose(0,1)
     orig_dctv = orig_dct.reshape(1,-1)[0]
     orig_dctv_s = scipy.argsort(orig_dctv)[::-1]

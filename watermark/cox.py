@@ -1,4 +1,3 @@
-#!/usr/bin/env python2
 
 import scipy
 import scipy.fftpack
@@ -6,7 +5,7 @@ import scipy.signal
 
 import random
 from math import sqrt
-from util import rgb_to_yiq_img, yiq_to_rgb_img
+from .util import rgb_to_yiq_img, yiq_to_rgb_img
 
 
 def embed_file(inputfile, outputfile, watermark, alpha=0.1):
@@ -142,7 +141,7 @@ def test(orig_rgb, suspect_rgb, watermark, alpha=0.1, threshold=6):
         * stats : Tuple of (standard deviation, score)
         * scores : a list containing the scores of all watermarks against which
             the testing was done.
-        * suspectindex : integer index where the suspect watermark was placed
+        * index : integer index where the suspect watermark was placed
             in the scores return value.
     """
 
@@ -209,4 +208,4 @@ def test(orig_rgb, suspect_rgb, watermark, alpha=0.1, threshold=6):
     return {"test": testresult,
             "stats": (sigma, suspectscore),
             "scores": score,
-            "suspectindex": suspectindex}
+            "index": suspectindex}

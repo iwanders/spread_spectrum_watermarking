@@ -40,7 +40,7 @@ a = cox.test_file(origfile="Lenna.bmp",suspectfile="watermarked.bmp",watermark=o
 print("Watermark present: %s" % a["test"])
 
 
-if (plotIt == True):
+if (plotIt):
     try:
         import matplotlib.pyplot as plt
     except ImportError:
@@ -52,3 +52,4 @@ if (plotIt == True):
     plt.plot(a["index"], a["scores"][a["index"]],'o r',markersize=10)
     # show plot.
     plt.show()
+    #plt.savefig("test_result.png", transparent=True)

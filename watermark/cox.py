@@ -4,10 +4,9 @@ import scipy
 import scipy.fftpack
 import scipy.signal
 
+import random
 from math import sqrt
-from util import rgb_to_yiq_img,yiq_to_rgb_img
-
-#from util import debug_plot
+from util import rgb_to_yiq_img, yiq_to_rgb_img
 
 
 def embed_file(inputfile, outputfile, watermark, alpha=0.1):
@@ -24,15 +23,14 @@ def embed_file(inputfile, outputfile, watermark, alpha=0.1):
                 the default and from the paper.
     """
     rgb_in = scipy.misc.imread(inputfile)
-    out_rgb = embed(rgb_in,watermark,alpha)
-    
+    out_rgb = embed(rgb_in, watermark, alpha)
+
     outdata = (out_rgb).astype('uint8')
     # write the output.
     scipy.misc.imsave(outputfile, outdata)
-    
 
 
-def test_file(origfile,suspectfile, watermark,alpha=0.1):
+def test_file(origfile, suspectfile, watermark, alpha=0.1):
     """
     :parameters:
         suspectfile
@@ -44,21 +42,30 @@ def test_file(origfile,suspectfile, watermark,alpha=0.1):
     """
     orig_rgb = scipy.misc.imread(origfile)
     suspect_rgb = scipy.misc.imread(suspectfile)
-    test(orig_rgb,suspect_rgb, watermark,alpha=0.1)
-
+    return test(orig_rgb, suspect_rgb, watermark, alpha=0.1)
 
 
 def embed(input_rgb, watermark, alpha=0.1):
-    
+    """
+    :parameters:
+        input_rgb
+            A SciPy array of shape (width,height,3) containing RGB values.
+        watermark
+            An iterable returning numeric values to embed.
+        alpha
+            Specifies how strongly the watermark is embedded. Alpha 0.1 is
+            the default and from the paper.
+    """
+
+
     # Step 1, convert RGB TO YIQ and acquire Y.
     inshape = input_rgb.shape
-    #print("INSHAPE RGB->YIQ:")
-    #print(inshape)
+
     yiq_indata = rgb_to_yiq_img(input_rgb)
     #print(yiq_indata.shape)
 
     # width x height x Y component matrix.
-    y_indata = yiq_indata[:,:,0]
+    y_indata = yiq_indata[:, :, 0] # cannot be made pep8 compatible.
 
 
     # Step 2, use the acquired Y data to perform a 2 dimensional DCT.
@@ -68,11 +75,12 @@ def embed(input_rgb, watermark, alpha=0.1):
     idct = lambda x: scipy.fftpack.idct(x, norm='ortho')
 
     # Perform the computation.
-    in_dct = dct(dct(y_indata).transpose(1,0)).transpose(0,1).transpose(0,1)
-    print(in_dct)
+    in_dct = dct(dct(y_indata).transpose(1, 0)).transpose(0,
+                                                            1).transpose(0, 1)
+
     # Step 3, convert these DCT components back to a vector once again.
-    in_dctv = in_dct.reshape(1,-1)[0]
-    print(in_dctv)
+    in_dctv = in_dct.reshape(1, -1)[0]
+
 
     # Step 4, sort this vector, so we know where the highest components are.
     in_dctv_s = scipy.argsort(in_dctv)
@@ -81,102 +89,124 @@ def embed(input_rgb, watermark, alpha=0.1):
 
     # Step 5, embed the sequence in the highest N components.
     out_dctv = in_dctv # from now on its the output
-    for i,v in enumerate(watermark):
-        # embedding using eq (2) from paper.
-        # skipping the DC component as well.
-        out_dctv[in_dctv_s[i+1]] = in_dctv[in_dctv_s[i+1]] * (1.0 + v * alpha)
+    for i, v in enumerate(watermark):
+        # embedding using eq (2) from paper. Skipping the DC component during
+        # embedding just as in the paper.
+        Vapos = in_dctv[in_dctv_s[i + 1]] * (1.0 + v * alpha)
+        out_dctv[in_dctv_s[i + 1]] = Vapos
 
     # that's it. The watermark is now embedded, all that remains is restoring
     # it back to a proper image.
-    
+
     # Step 6, create the DCT matrix again.
-    out_dct = out_dctv.reshape(inshape[0],inshape[1])
+    out_dct = out_dctv.reshape(inshape[0], inshape[1])
 
     # Step 7, perform the inverse of the DCT transform.
-    y_outdata = idct(idct(out_dct).transpose(1,0)).transpose(0,1).transpose(0,1)
-    
+    y_outdata = idct(idct(out_dct).transpose(1, 0)).transpose(0,
+                                                            1).transpose(0, 1)
+
     # Step 8, recompose the Y component with its IQ components.
     yiq_outdata = yiq_indata
     # overwrite th Y component.
-    yiq_outdata[:,:,0] = y_outdata
-    
+    yiq_outdata[:, :, 0] = y_outdata
+
     # Step 9, convert our YIQ Nx3 matrix back to RGB of original size.
     outdata = yiq_to_rgb_img(yiq_outdata)
-    
+
 
     # return it, the embedding process is done.
     return outdata
 
 
-def test(orig_rgb,suspect_rgb, watermark,alpha=0.1):
+def test(orig_rgb, suspect_rgb, watermark, alpha=0.1, threshold=6):
+    """
+    :parameters:
+        orig_rgb
+            A SciPy array of shape (width,height,3) containing RGB values. This
+            should be the original image.
+        suspect_rgb
+            A SciPy array of shape (width,height,3) containing RGB values. This
+            is the image we suspect a watermark to be present.
+        watermark
+            The suspected watermark to test.
+        alpha
+            Specifies how strongly the watermark is embedded. Alpha 0.1 is
+            the default and from the paper.
+        threshold
+            threshold, number of standard deviations the suspected watermark
+            should be away from the standard deviation. T=6 is from the paper.
 
-    # define shorthands
+    :rtype: dictionary with the following entries:
+        * test : Boolean indicating whether the response exceeded the
+            threshold.
+        * stats : Tuple of (standard deviation, score)
+        * scores : a list containing the scores of all watermarks against which
+            the testing was done.
+        * suspectindex : integer index where the suspect watermark was placed
+            in the scores return value.
+    """
+
+    # define shorthand
     dct = lambda x: scipy.fftpack.dct(x, norm='ortho')
 
-    
+    # Step 1: convert the suspect to a Y vector.
     yiq_suspectdata = rgb_to_yiq_img(suspect_rgb)
-    y_suspectdata = yiq_suspectdata[:,:,0]
-    suspect_dct = dct(dct(y_suspectdata).transpose(1,0)).transpose(0,1).transpose(0,1)
-    suspect_dctv = suspect_dct.reshape(1,-1)[0]
-    suspect_dctv_s = scipy.argsort(suspect_dctv)[::-1]
+    y_suspectdata = yiq_suspectdata[:, :, 0]
+    suspect_dct = dct(dct(y_suspectdata).transpose(1, 0)).transpose(0,
+                                                            1).transpose(0, 1)
+    suspect_dctv = suspect_dct.reshape(1, -1)[0]
+    suspect_dctv_s = scipy.argsort(suspect_dctv)[::-1] # in descending order
 
-
+    # Step 2: same for the original
     yiq_origdata = rgb_to_yiq_img(orig_rgb)
-    y_origdata = yiq_origdata[:,:,0]
-    orig_dct = dct(dct(y_origdata).transpose(1,0)).transpose(0,1).transpose(0,1)
-    orig_dctv = orig_dct.reshape(1,-1)[0]
+    y_origdata = yiq_origdata[:, :, 0]
+    orig_dct = dct(dct(y_origdata).transpose(1, 0)).transpose(0,
+                                                            1).transpose(0, 1)
+    orig_dctv = orig_dct.reshape(1, -1)[0]
     orig_dctv_s = scipy.argsort(orig_dctv)[::-1]
-    #print(orig_dctv_s[0:5])
 
-    
+    # Step 3: obtain X* from our suspect
     Xstar = scipy.zeros((len(watermark)))
-    for i,v in enumerate(watermark):
-        #print("\n\n index: %d, %f" % (i,v))
-        #print("Suspect has: %f at %d" % (suspect_dctv[suspect_dctv_s[i]],suspect_dctv_s[i]))
-        #print("Orig has: %f at %d" % (orig_dctv[orig_dctv_s[i]],orig_dctv_s[i]))
-
+    for i, v in enumerate(watermark):
         # inverse of eq (2)
-        #x =  (suspect_dctv[suspect_dctv_s[i+1]] - orig_dctv[orig_dctv_s[i+1]])/(orig_dctv[orig_dctv_s[i+1]]*alpha)
-        x =  (suspect_dctv[orig_dctv_s[i+1]] - orig_dctv[orig_dctv_s[i+1]])/(orig_dctv[orig_dctv_s[i+1]]*alpha)
+        Vstar = suspect_dctv[orig_dctv_s[i + 1]]
+        # the paper is not clear if the sorted indices of the suspect should be
+        # used here. If they are used however, no watermark is detected.
+
+        # The paper states this; "We extract X* by first extracting a set of
+        # values V* = v_1*,...v_n* from D* (using information about D) and then
+        # generating X* from V* and V."
+        # So it seems reasonable to assume that the original N highest
+        # components are used.
+
+        V = orig_dctv[orig_dctv_s[i + 1]]
+        x = (Vstar - V) / (V * alpha)
         Xstar[i] = x
-        #Xstar[i] = -1 if x < 0 else 1
 
-    #print(Xstar)
-    print(' '.join([str("%+1.1f" % x) for x in Xstar[0:20]]))
-    
-    import random
-    random.seed(89198189119189)
+    # Step 4: create n random watermarks.
+    n = len(watermark)
+    marks = scipy.zeros((n, len(watermark)))
+    suspectindex = int(round(n / 2))
+    for i in range(0, n):
 
-    #ourMark = [int(random.choice((0,1))) for x in range(1,ourLength+1)]
-    others = len(watermark)
-    marks = scipy.zeros((others,len(watermark)))
-    for i in range(0,others):
-        if (i == round(others/2)):
-            #marks[i,:] = [ -1 if x < 0 else 1 for x in watermark]
-            marks[i,:] = watermark
-            continue;
-        marks[i,:] = [random.gauss(0,1) for x in range(0,len(watermark))]
-        #marks[i,:] = [int(random.choice((-1,1))) for x in range(0,len(watermark))]
-    
-    score = scipy.zeros((others,1))
-    for i in range(0,others):
+        # if at suspect index (center of results), insert the suspected Xstar.
+        if (i == suspectindex):
+            marks[i, :] = watermark
+            continue
+
+        # picking from N(0,1) with normal(mu,sigma) as in the paper.
+        marks[i, :] = [random.gauss(0, 1) for x in range(0, len(watermark))]
+
+    # Step 5: Compute the similarity according to the paper.
+    score = [0 for i in range(0, n)]
+    for i in range(0,n):
+        # sim(mark,Xstar) = (Xstar dotproduct mark)/sqrt(Xstar dotprod Xstar)
         score[i] = scipy.dot(Xstar,marks[i]) / sqrt(scipy.dot(Xstar,Xstar))
 
-    #print(score)
-    print("Score of hit: %f" % score[round(others/2)])
-    print("max, min, mean: %f, %f, %f" % (max(score), min(score), scipy.mean(score)))
-
-    import matplotlib.pyplot as plt
-    import matplotlib
-    plt.plot(range(0,others),score,'k')
-    plt.plot(round(others/2),score[round(others/2)], 'r*',markersize=30)
-    #plt.plot(range(0,len(watermark)), (suspect_dctv[suspect_dctv_s[1:len(watermark)+1]] - orig_dctv[orig_dctv_s[1:len(watermark)+1]])/(orig_dctv[orig_dctv_s[1:len(watermark)+1]]*alpha))
-    #plt.plot(range(0,len(watermark)), scipy.array(watermark)*alpha*3 ,'g')
-    plt.show()
-    
-
-
-
-# very useful during debugging:
-#import code
-#code.interact(local=locals())
+    sigma = scipy.std(score)
+    suspectscore = score[suspectindex]
+    testresult = suspectscore > threshold
+    return {"test": testresult,
+            "stats": (sigma, suspectscore),
+            "scores": score,
+            "suspectindex": suspectindex}

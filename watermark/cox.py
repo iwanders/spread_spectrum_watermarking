@@ -75,7 +75,7 @@ def embed(input_rgb, watermark, alpha=0.1):
 
     # Perform the computation.
     in_dct = dct(dct(y_indata).transpose(1, 0)).transpose(0,
-                                                            1).transpose(0, 1)
+                                                            1).transpose(1, 0)
 
     # Step 3, convert these DCT components back to a vector once again.
     in_dctv = in_dct.reshape(1, -1)[0]
@@ -102,7 +102,7 @@ def embed(input_rgb, watermark, alpha=0.1):
 
     # Step 7, perform the inverse of the DCT transform.
     y_outdata = idct(idct(out_dct).transpose(1, 0)).transpose(0,
-                                                            1).transpose(0, 1)
+                                                            1).transpose(1, 0)
 
     # Step 8, recompose the Y component with its IQ components.
     yiq_outdata = yiq_indata

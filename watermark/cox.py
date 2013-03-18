@@ -3,11 +3,11 @@
 import scipy
 import scipy.fftpack
 import scipy.signal
+
 from math import sqrt
-from util import rgb_to_yiq_matrix,yiq_to_rgb_matrix
 from util import rgb_to_yiq_img,yiq_to_rgb_img
 
-from util import debug_plot
+#from util import debug_plot
 
 
 def embed_file(inputfile, outputfile, watermark, alpha=0.1):
@@ -26,10 +26,8 @@ def embed_file(inputfile, outputfile, watermark, alpha=0.1):
     rgb_in = scipy.misc.imread(inputfile)
     out_rgb = embed(rgb_in,watermark,alpha)
     
-    outdata = (out_rgb).astype('uint8')#
-    #print(outdata.shape)
-
-    # Step 10, write this file.
+    outdata = (out_rgb).astype('uint8')
+    # write the output.
     scipy.misc.imsave(outputfile, outdata)
     
 

@@ -25,7 +25,6 @@ def yiq_to_rgb_matrix(a):
                                 [1, -0.276066, -0.639810],
                                 [1, -1.105450, 1.729860]]),a)
     # still have to enforce the limits... method sucks, works for now.
-    print(x.shape)
     min_val = 0
     max_val = 255
     for i in range(0,x.shape[1]):
@@ -39,42 +38,18 @@ def yiq_to_rgb_matrix(a):
 
 def rgb_to_yiq_img(indata):
     inshape = indata.shape
-    
-    r = indata[:,:,0].reshape(-1,1)
-    g = indata[:,:,1].reshape(-1,1)
-    b = indata[:,:,2].reshape(-1,1)
-    
-    rgb = scipy.hstack((r,g,b)).transpose()
-    
+    rgb = indata.reshape(-1,3).transpose()
     yiq_data = rgb_to_yiq_matrix(rgb)
-    
-    Y = yiq_data[0,:].reshape(inshape[0],inshape[1])
-    I = yiq_data[1,:].reshape(inshape[0],inshape[1])
-    Q = yiq_data[2,:].reshape(inshape[0],inshape[1])
-    
-    yiq_matr = scipy.dstack((Y,I,Q))
-    
-    #debug_plot(yiq_matr[:,:,0])
-    
+    yiq_matr = yiq_data.transpose().reshape(inshape[0],inshape[1],3)
     return yiq_matr
 
 
 def yiq_to_rgb_img(indata):
     inshape = indata.shape
-    
-    r = indata[:,:,0].reshape(-1,1)
-    g = indata[:,:,1].reshape(-1,1)
-    b = indata[:,:,2].reshape(-1,1)
-    
-    rgb = scipy.hstack((r,g,b)).transpose()
-    yiq_data = yiq_to_rgb_matrix(rgb)
-
-    Y = yiq_data[0,:].reshape(inshape[0],inshape[1])
-    I = yiq_data[1,:].reshape(inshape[0],inshape[1])
-    Q = yiq_data[2,:].reshape(inshape[0],inshape[1])
-    yiq_matr = scipy.dstack((Y,I,Q))
-    
-    return yiq_matr
+    yiq = indata.reshape(-1,3).transpose()
+    rgb_data = yiq_to_rgb_matrix(yiq)
+    rgb_matr = rgb_data.transpose().reshape(inshape[0],inshape[1],3)
+    return rgb_matr
 
 
 

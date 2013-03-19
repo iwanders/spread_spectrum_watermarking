@@ -28,19 +28,19 @@ watermarks = []
 # create a watermark and add it to the list.
 ourMark = [random.gauss(0,1) for x in range(0,ourLength)]
 watermarks.append(ourMark)
-print("Embedding watermark[0] into watermarked0.bmp")
-cox.embed_file(inputfile="Lenna.bmp",outputfile="watermarked0.bmp",watermark=ourMark,alpha=alpha)
+print("Embedding watermark[0] into watermarked0.png")
+cox.embed_file(inputfile="Lenna.bmp",outputfile="watermarked0.png",watermark=ourMark,alpha=alpha)
 
 ourMark = [random.gauss(0,1) for x in range(0,ourLength)]
 watermarks.append(ourMark)
-print("Embedding watermark[1] into watermarked1.bmp")
-cox.embed_file(inputfile="Lenna.bmp",outputfile="watermarked1.bmp",watermark=ourMark,alpha=alpha)
+print("Embedding watermark[1] into watermarked1.png")
+cox.embed_file(inputfile="Lenna.bmp",outputfile="watermarked1.png",watermark=ourMark,alpha=alpha)
 
 # cause some damage to the watermark... (uses the 'new' highest DCT coeffs)
 # This is a HIGHLY directed attack, Watermark 1 should still be present.
 scrambleMark = [random.gauss(0,1) for x in range(0,ourLength)]
-print("Attacking watermarked1.bmp with a bogus mark. Watermark[1] should still be detectable in watermarked2.bmp.")
-cox.embed_file(inputfile="watermarked1.bmp",outputfile="watermarked2.bmp",watermark=scrambleMark,alpha=alpha)
+print("Attacking watermarked1.png with a bogus mark. Watermark[1] should still be detectable in watermarked2.png.")
+cox.embed_file(inputfile="watermarked1.png",outputfile="watermarked2.png",watermark=scrambleMark,alpha=alpha)
 
 
 
@@ -48,7 +48,7 @@ cox.embed_file(inputfile="watermarked1.bmp",outputfile="watermarked2.bmp",waterm
 for i in range(0,2):
     # walk over images.
     for j in range(0,3):
-        filename = "watermarked%d.bmp"%j
+        filename = "watermarked%d.png"%j
         a = cox.test_file(origfile="Lenna.bmp",suspectfile=filename,watermark=watermarks[i],alpha=alpha)
         print("Watermark %d present in %s  -> %s (std: %f, score: %f)" % (i,filename,a["test"], a["stats"][0],a["stats"][1]))
         if (plotIt):

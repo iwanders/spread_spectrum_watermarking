@@ -18,7 +18,7 @@ if (not os.path.lexists('LennaPart.bmp')):
     import scipy
     # save Lenna.bmp as color image (even though it is BW)
     LennaPart = scipy.misc.lena()[30:413,160:376]
-    scipy.misc.imsave("LennaPart.bmp", scipy.dstack((LennaPart,
+    scipy.misc.imsave("LennaPart.png", scipy.dstack((LennaPart,
                                                 LennaPart,
                                                     LennaPart)))
 
@@ -34,10 +34,10 @@ plotIt = True
 
 
 
-cox.embed_file(inputfile="LennaPart.bmp",outputfile="halfwatermarked.bmp",watermark=ourMark,alpha=alpha)
+cox.embed_file(inputfile="LennaPart.png",outputfile="halfwatermarked.png",watermark=ourMark,alpha=alpha)
 
 
-a = cox.test_file(origfile="LennaPart.bmp",suspectfile="halfwatermarked.bmp",watermark=ourMark,alpha=alpha)
+a = cox.test_file(origfile="LennaPart.png",suspectfile="halfwatermarked.png",watermark=ourMark,alpha=alpha)
 print("Watermark present: %s" % a["test"])
 
 

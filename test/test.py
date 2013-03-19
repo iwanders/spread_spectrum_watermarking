@@ -33,10 +33,10 @@ plotIt = True
 
 
 
-cox.embed_file(inputfile="Lenna.bmp",outputfile="watermarked.bmp",watermark=ourMark,alpha=alpha)
+cox.embed_file(inputfile="Lenna.bmp",outputfile="watermarked.png",watermark=ourMark,alpha=alpha)
 
 
-a = cox.test_file(origfile="Lenna.bmp",suspectfile="watermarked.bmp",watermark=ourMark,alpha=alpha)
+a = cox.test_file(origfile="Lenna.bmp",suspectfile="watermarked.png",watermark=ourMark,alpha=alpha)
 print("Watermark present: %s" % a["test"])
 
 

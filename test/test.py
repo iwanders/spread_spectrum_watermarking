@@ -30,6 +30,7 @@ alpha = 0.1 # 0.1 is default
 ourMark = [random.gauss(0,1) for x in range(0,ourLength)]
 
 plotIt = True
+create_difference_file = True
 
 
 
@@ -53,3 +54,9 @@ if (plotIt):
     # show plot.
     plt.show()
     #plt.savefig("test_result.png", transparent=True)
+
+
+if (create_difference_file):
+    import watermark.image
+    watermark.image.diff_file(input_file1="Lenna.bmp", input_file2="watermarked.png", output_file="difference.png",mode='rgb')
+

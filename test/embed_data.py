@@ -24,17 +24,15 @@ print(embedthis[0:40])
 input_path="Lenna.bmp"
 output_file="watermarked.png"
 input_file = cox.yiq_dct_image.open(input_path)
-mark = cox.dctwatermarker(input_file)
-mark.wm(embedthis)
-mark.embed()
+mark = cox.Marker(input_file)
+mark.embed(embedthis)
 mark.output().write(output_file)
 
 
 target_image = cox.yiq_dct_image.open(output_file)
-tester = cox.dctwatermarker(target_image)
-tester.orig_file(input_path)
+tester = cox.Tester(target=target_image,original=input_path)
 
-extract = tester.extract(size=ourLength)
+extract = tester.extract(length=ourLength)
 
 print(extract[0:40])
 sanitized = [-1 if (extract[i] * key[i])<0 else 1 for i in range(0,ourLength)]

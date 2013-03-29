@@ -29,19 +29,16 @@ create_difference_file = True
 input_path="Lenna.bmp"
 output_file="watermarked.png"
 input_file = cox.yiq_dct_image.open(input_path)
-mark = cox.dctwatermarker(input_file)
-mark.wm(ourMark1)
-mark.embed()
-mark.wm(ourMark2)
-mark.embed()
+mark = cox.Marker(input_file)
+mark.embed(ourMark1)
+mark.embed(ourMark2)
 mark.output().write(output_file)
 
 
-
-res, stats = cox.simple_test(orig_file="Lenna.bmp",target_file="watermarked.png",watermark=ourMark1)
+a = cox.Tester(original="Lenna.bmp",target="watermarked.png")
+res, stats = a.test(watermark=ourMark1)
 print("res: %s, stats: %s" % (res, stats))
-a = cox.simple_test(orig_file="Lenna.bmp",target_file="watermarked.png",watermark=ourMark2)
-print(a)
+print(a.test(watermark=ourMark2))
 #print("Watermark present: %s" % a["test"])
 
 
@@ -51,7 +48,7 @@ print(a)
 
 
 input_file = cox.yiq_dct_image.open(input_path)
-mark = cox.dctwatermarker(input_file)
+mark = cox.Marker(input_file)
 newwm = []
 
 embedcount = 10
@@ -59,22 +56,22 @@ extratestCount = 100
 
 for i in range(0,embedcount):
     newwm.append([random.gauss(0,1) for x in range(0,ourLength)])
-    mark.embed_wm(newwm[i])
+    mark.embed(newwm[i])
 res = mark.output()
 res.write(output_file)
 
 
 target_image = cox.yiq_dct_image.open(output_file)
 print("new obj")
-tester = cox.dctwatermarker(target_image)
-tester.orig_file(input_path)
+tester = cox.Tester(target=target_image,original=input_path)
+
 
 
 for i in range(0,embedcount + extratestCount):
     if (i < len(newwm)):
-        print(tester.test_wm(newwm[i]))
+        print(tester.test(newwm[i]))
     else:
-        print(tester.test_wm([random.gauss(0,1) for x in range(0,ourLength)]))
+        print(tester.test([random.gauss(0,1) for x in range(0,ourLength)]))
 
 
 

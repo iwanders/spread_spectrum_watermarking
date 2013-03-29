@@ -7,147 +7,215 @@ import random
 from math import sqrt
 from .util import rgb_to_yiq_img, yiq_to_rgb_img
 
+def embed_function(v, o, alpha=0.1):
+    #Vapos = im.dct_o(i+1) * (1.0 + v * alpha)
+    return o * (1.0 + alpha * v)
 
-class dctwatermarker(object):
+def extract_function(V, Vstar, alpha=0.1):
+    # inverse of the embed function...
+    return (Vstar - V) / (V * alpha)
+
+def random_wm_function(length=1000, mu=0, sigma=1):
     """
-        This is the watermarker object, it takes a target of type
-        yiq_dct_image, on which embed or testing operations can be done.
-
-        By default, the indices of this target image are used.
+        Function which returns a random watermark.
     """
+    return [random.gauss(mu, sigma) for x in range(0, length)]
 
-    def __init__(self, target, alpha=0.1, size=1000):
+
+# cox' paper is always in DCT...
+class Tester(object):
+    """
+        This is the tester class for the Discrete Cosine Transform watermarking
+        as described in the paper by Cox et al.
+    """
+    def __init__(self, target, original, alpha=0.1, length=1000):
+        """
+            Initialise the testing object, with the various parameters.
+
+            :parameters:
+                target
+                    The target file that is being worked on.
+                    Can be an object of type `yiq_dct_image` or it can be a
+                    string to a pathname, in which a `yiq_dct_image` object is 
+                    constructed using this file.
+                original
+                    The original file as used in the embedding procedure.
+                    Can be an object of type `yiq_dct_image` or it can be a
+                    string to a pathname, in which a `yiq_dct_image` object is 
+                    constructed using this file.
+                alpha
+                    This is the alpha parameter, in the paper it determines how
+                    strongly the watermark is embedded, it is passed unchanged 
+                    to the embed and extract function.
+
+            The functions `extract_function` and `random_wm_function` can be
+            replaced by the user and are called as follows::
+                
+                extract_function(Vstar=Vstar, V=V, alpha=self.alpha)
+                random_wm_function(length=length)
+                
+        """
+        if (type(target) == str):
+            # create the image.
+            target = yiq_dct_image.open(target)
         self.target = target
-        self.original = target
+
+        if (type(original) == str):
+            original = yiq_dct_image.open(original)
+        self.original = original
+        
+        self.target.set_dct_indices(self.original.get_dct_indices())
+
+        self.extract_function = extract_function
+        #self.embed_function = embed_function
+        self.random_wm_function = random_wm_function
+
         self.alpha = alpha
-        self.size = size
         self.Xstar = None
         self.sigma = None
 
-    def embed_function(self, v, o, alpha=None):
-        if (alpha == None):
-            alpha = self.alpha
-        #Vapos = im.dct_o(i+1) * (1.0 + v * alpha)
-        return o * (1.0 + alpha * v)
+    def extract(self, length):
+        """
+            Function for extracting the embedded values using the original and
+            the target image.
 
-    def extract_function(self, V, Vstar, alpha=None):
-        if (alpha == None):
-            alpha = self.alpha
-        return (Vstar - V) / (V * alpha)
+            :parameters:
+                length
+                    Number of coefficients to extract.
 
-    def orig(self, orig):
+            Returns a list containing the extracted values.
         """
-            Use this `orig` as new original image, should be of type
-            yiq_dct_image. The highest indices of this image will be used
-            instead of those which are present in the target image.
-        """
-        self.original = orig
-        self.target.set_dct_indices(self.original.get_dct_indices())
+        Xstar = scipy.zeros((length))
 
-    def orig_file(self, path):
-        """
-            Creates a yiq_dct_image for the file located at path and uses this
-            as original.
-        """
-        self.orig(yiq_dct_image.open(path))
+        for i in range(0, length):
+            # inverse of eq (2)
+            Vstar = self.target.old(i + 1)
+            V = self.original.old(i + 1)
 
-    def wm_random(self, length=None, mu=0, sigma=1):
-        """
-            Function which returns a random watermark.
-        """
-        if (length == None):
-            length = self.size
-        return [random.gauss(mu, sigma) for x in range(0, length)]
+            x = self.extract_function(Vstar=Vstar, V=V, alpha=self.alpha)
+            Xstar[i] = x
+        self.Xstar = Xstar
+        self.XstarRS = sqrt(scipy.dot(self.Xstar, self.Xstar))# root square
+        return list(Xstar)
 
-    def wm(self, wm):
+    def response(self, length, N=1000):
         """
-            Sets the current watermark to test.
+            Calculates the random response of N random watermarks against the
+            extracted watermark.
+            :parameters:
+                length
+                    Length of the watermark to compare against. 
+                N
+                    Number of random watermarks to check against.
         """
-        if (len(wm) != self.size):
-            # if it is a different size, reset the 'state'.
-            self.size = len(wm)
-            self.Xstar = None
-        self.watermark = wm
+        score = [0 for i in range(0, N)]
+        for i in range(0, N):
+            score.append(scipy.dot(self.Xstar,
+                    self.random_wm_function(length=length)) / self.XstarRS)
+        self.sigma = scipy.std(score)
+        return self.sigma, score
 
-    def embed(self):
+    def test(self, watermark, N=1000, threshold=6):
         """
-            Embed the self.watermark value into the current target.
+            Test a current watermark against a set of random watermarks.
+            :parameters:
+                watermark
+                    The watermark to check. The length of this watermark is
+                    used for comparison.
+                N
+                    Number of random watermarks to check against.
+                threshold
+                    The minimum factor by which the test result should exceed
+                    the standard deviation.
+
+            Returns a tuple (testresult, (sigma, score)).
         """
-        for i, v in enumerate(self.watermark):
+
+        if ((self.Xstar == None) or (len(self.Xstar) != len(watermark))):
+            self.extract(length=len(watermark))
+
+        # Step 4: create n random watermarks.
+        if (self.sigma == None):
+            self.response(N=N, length=len(watermark))
+
+        suspectscore = scipy.dot(self.Xstar, watermark) / self.XstarRS
+        testresult = suspectscore > threshold * self.sigma
+        return testresult, (self.sigma, suspectscore)
+
+
+
+
+class Marker(object):
+    def __init__(self,target, original=None, alpha=0.1):
+        """
+            Initialise the testing object, with the various parameters.
+
+            :parameters:
+                target
+                    The target file that is being worked on.
+                    Can be an object of type `yiq_dct_image` or it can be a
+                    string to a pathname, in which a `yiq_dct_image` object is 
+                    constructed using this file.
+                original
+                    The original file to be used as original in the embedding
+                    procedure. When it is not provided it is taken the same as
+                    the target file.
+                    Can be an object of type `yiq_dct_image` or it can be a
+                    string to a pathname, in which a `yiq_dct_image` object is 
+                    constructed using this file.
+                alpha
+                    This is the alpha parameter, in the paper it determines how
+                    strongly the watermark is embedded, it is passed unchanged 
+                    to the embed and extract function.
+
+            The functions `embed_function` and `random_wm_function` can be
+            replaced by the user and are called as follows::
+                
+                embed_function(v=v, alpha=self.alpha,
+                                                o=self.original.old(i + 1))
+                random_wm_function(length=length)
+        """
+        if (type(target) == str):
+            # create the image.
+            target = yiq_dct_image.open(target)
+        self.target = target
+
+        if (type(original) == str):
+            original = yiq_dct_image.open(original)
+
+        if (original != None):
+            self.original = target
+            self.target.set_dct_indices(self.original.get_dct_indices())
+        else:
+            self.original = target
+
+        self.extract_function = extract_function
+        self.embed_function = embed_function
+        self.random_wm_function = random_wm_function
+
+        self.alpha = alpha
+
+    def embed(self,watermark):
+        """
+            Embed the provided watermark value into the current target.
+            :parameters:
+                watermark
+                    This should be an iterable of which the values will be
+                    provided to the embed function as value `v`.
+                    With the default, this should be some numeric. (Usually
+                    from the standard normal distribution.)
+        """
+        for i, v in enumerate(watermark):
             # embedding using eq (2) from paper.
             # Skipping the DC component during embedding just as in the paper.
-            self.target.n(i + 1, self.embed_function(v=v,
-                                            o=self.original.o(i + 1)))
-
-    def embed_wm(self, wm):
-        """
-            Function which calls self.wm(wm) and the embed function.
-        """
-        self.wm(wm)
-        self.embed()
-
+            self.target.new(i + 1, self.embed_function(v=v,alpha=self.alpha,
+                                            o=self.original.old(i + 1)))
     def output(self):
         """
             Return the current target, which was manipulated.
         """
         return self.target
 
-    def extract(self, size=None):
-        """
-            Function for extracting the embedded values using the original and
-            the target image.
-        """
-        if (size != None):
-            self.size = size
-        Xstar = scipy.zeros((self.size))
-        #print(Xstar.shape)
-        for i in range(0, self.size):
-            # inverse of eq (2)
-            Vstar = self.target.o(i + 1)
-
-            V = self.original.o(i + 1)
-            x = self.extract_function(Vstar=Vstar, V=V)
-            Xstar[i] = x
-        self.Xstar = Xstar
-        self.XstarRS = sqrt(scipy.dot(self.Xstar, self.Xstar))# root square
-        return list(Xstar)
-
-    def response(self, N=1000):
-        """
-            Calculates the random response of N random watermarks against the
-            extracted watermark.
-        """
-        score = [0 for i in range(0, N)]
-        for i in range(0, N):
-            score.append(scipy.dot(self.Xstar, self.wm_random()) /
-                                                                self.XstarRS)
-        self.sigma = scipy.std(score)
-        return self.sigma, score
-
-    def test(self, N=1000, threshold=6):
-        """
-            Test the current watermark against a set of random watermarks.
-
-            Returns a tuple (testresult, (sigma, score)).
-        """
-
-        if (self.Xstar == None):
-            self.extract()
-
-        # Step 4: create n random watermarks.
-        if (self.sigma == None):
-            self.response(N)
-
-        suspectscore = scipy.dot(self.Xstar, self.watermark) / self.XstarRS
-        testresult = suspectscore > threshold * self.sigma
-        return testresult, (self.sigma, suspectscore)
-
-    def test_wm(self, wm):
-        """
-            Function which calls self.wm(wm) and the embed function.
-        """
-        self.wm(wm)
-        return self.test()
 
 
 class yiq_dct_image(object):
@@ -155,9 +223,8 @@ class yiq_dct_image(object):
         This class allows for easy manipulation of the DCT coefficients.
 
         :parameters:
-            sinput_rgb
+            input_rgb
                 A SciPy array of shape (width,height,3) containing RGB values.
-
     """
 
     def __init__(self, input_rgb):
@@ -188,9 +255,9 @@ class yiq_dct_image(object):
         in_dctv_s = in_dctv_s[::-1]
 
         self.y_dct_s = in_dctv_s   # vector of indices, sorted by magnitude
-        self.y_dct_sn = in_dctv_s  # idem
+        self.y_dct_sn = in_dctv_s.copy()  # idem
         self.y_dct = in_dctv       # vector of values, non-sorted
-        self.y_dct_n = in_dctv     # idem
+        self.y_dct_n = in_dctv.copy()     # idem
 
     @classmethod
     def open(cls, path):
@@ -219,8 +286,7 @@ class yiq_dct_image(object):
         """
         self.y_dct_sn = indices
 
-    # get the value
-    def o(self, i):
+    def old(self, i):
         """
             Get the original value which is represented by the i'th index in
             the current sorted indices.
@@ -228,7 +294,7 @@ class yiq_dct_image(object):
         return self.y_dct[self.y_dct_sn[i]]
 
     # set the value. in the new entry.
-    def n(self, i, v):
+    def new(self, i, v):
         """
             Set the i'th index to value v.
         """
@@ -257,17 +323,15 @@ class yiq_dct_image(object):
 
 
 def simple_embed(input_file, output_file, watermark):
-    input_file = yiq_dct_image(scipy.misc.imread(input_file).astype('f'))
-    mark = dctwatermarker(input_file)
-    mark.wm(watermark)
-    mark.embed()
+    #input_file = yiq_dct_image(scipy.misc.imread(input_file).astype('f'))
+    mark = Marker(input_file)
+    mark.embed(watermark)
     scipy.misc.imsave(output_file, mark.output().rgb())
 
 
 def simple_test(orig_file, target_file, watermark):
-    orig_file = yiq_dct_image(scipy.misc.imread(orig_file).astype('f'))
-    target_file = yiq_dct_image(scipy.misc.imread(target_file).astype('f'))
-    mark = dctwatermarker(target_file)
-    mark.orig(orig_file)
-    mark.wm(watermark)
-    return mark.test()
+    #orig_file = yiq_dct_image(scipy.misc.imread(orig_file).astype('f'))
+    #target_file = yiq_dct_image(scipy.misc.imread(target_file).astype('f'))
+    tester = Tester(original=orig_file, target=target_file)
+    
+    return tester.test(watermark)

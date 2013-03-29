@@ -4,12 +4,12 @@
 
 # import the module
 try:
-    from watermark import cox
+    from watermark import simple as cox
 except ImportError:
     print("Module not installed. Using one in ../")
     import sys
     sys.path.insert(0, "..")
-    from watermark import cox
+    from watermark import simple as cox
 
 # check if we have a Lenna.bmp, otherwise create it.
 import os

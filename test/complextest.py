@@ -32,13 +32,13 @@ ourMark = [random.gauss(0,1) for x in range(0,ourLength)]
 plotIt = True
 create_difference_file = True
 
-print(ourMark)
+#print(ourMark)
 
 
-cox.simplecox(input_file="Lenna.bmp",output_file="watermarked.png",watermark=ourMark)
+cox.simple_embed(input_file="Lenna.bmp",output_file="watermarked.png",watermark=ourMark)
 
 
-a = cox.simplecox_test(orig_file="Lenna.bmp",target_file="watermarked.png",watermark=ourMark)
+a = cox.simple_test(orig_file="Lenna.bmp",target_file="watermarked.png",watermark=ourMark)
 print(a)
 #print("Watermark present: %s" % a["test"])
 

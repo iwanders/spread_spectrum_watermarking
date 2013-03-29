@@ -4,12 +4,12 @@
 
 # import the module
 try:
-    from watermark import simple as cox
+    from watermark import cox
 except ImportError:
     print("Module not installed. Using one in ../")
     import sys
     sys.path.insert(0, "..")
-    from watermark import simple as cox
+    from watermark import cox
 
 # check if we have a Lenna.bmp, otherwise create it.
 import os
@@ -32,28 +32,16 @@ ourMark = [random.gauss(0,1) for x in range(0,ourLength)]
 plotIt = True
 create_difference_file = True
 
+#print(ourMark)
 
 
-cox.embed_file(inputfile="Lenna.bmp",outputfile="watermarked.png",watermark=ourMark,alpha=alpha)
+cox.simple_embed(input_file="Lenna.bmp",output_file="watermarked.png",watermark=ourMark)
 
 
-a = cox.test_file(origfile="Lenna.bmp",suspectfile="watermarked.png",watermark=ourMark,alpha=alpha)
-print("Watermark present: %s" % a["test"])
+a = cox.simple_test(orig_file="Lenna.bmp",target_file="watermarked.png",watermark=ourMark)
+print(a)
+#print("Watermark present: %s" % a["test"])
 
-
-if (plotIt):
-    try:
-        import matplotlib.pyplot as plt
-    except ImportError:
-        print("Should have matplotlib for plotting.")
-
-    # plot all random stuff.
-    plt.plot(range(0,len(a["scores"])), a["scores"],'k')
-    # mark the suspected watermark with a red circle.
-    plt.plot(a["index"], a["scores"][a["index"]],'o k',markersize=10)
-    # show plot.
-    plt.show()
-    #plt.savefig("test_result.png", transparent=True)
 
 
 if (create_difference_file):

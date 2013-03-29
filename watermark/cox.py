@@ -44,6 +44,13 @@ class dctwatermarker(object):
         self.original = orig
         self.target.set_dct_indices(self.original.get_dct_indices())
 
+    def orig_file(self, path):
+        """
+            Creates a yiq_dct_image for the file located at path and uses this
+            as original.
+        """
+        self.orig(yiq_dct_image.open(path))
+
     def wm_random(self, length=None, mu=0, sigma=1):
         """
             Function which returns a random watermark.
@@ -56,8 +63,10 @@ class dctwatermarker(object):
         """
             Sets the current watermark to test.
         """
-        self.size = len(wm)
-        self.Xstar = None
+        if (len(wm) != self.size):
+            # if it is a different size, reset the 'state'.
+            self.size = len(wm)
+            self.Xstar = None
         self.watermark = wm
 
     def embed(self):
@@ -70,17 +79,26 @@ class dctwatermarker(object):
             self.target.n(i + 1, self.embed_function(v=v,
                                             o=self.original.o(i + 1)))
 
+    def embed_wm(self, wm):
+        """
+            Function which calls self.wm(wm) and the embed function.
+        """
+        self.wm(wm)
+        self.embed()
+
     def output(self):
         """
             Return the current target, which was manipulated.
         """
         return self.target
 
-    def extract(self):
+    def extract(self, size=None):
         """
             Function for extracting the embedded values using the original and
             the target image.
         """
+        if (size != None):
+            self.size = size
         Xstar = scipy.zeros((self.size))
         #print(Xstar.shape)
         for i in range(0, self.size):
@@ -104,11 +122,13 @@ class dctwatermarker(object):
             score.append(scipy.dot(self.Xstar, self.wm_random()) /
                                                                 self.XstarRS)
         self.sigma = scipy.std(score)
-        return self.sigma
+        return self.sigma, score
 
     def test(self, N=1000, threshold=6):
         """
             Test the current watermark against a set of random watermarks.
+
+            Returns a tuple (testresult, (sigma, score)).
         """
 
         if (self.Xstar == None):
@@ -120,7 +140,14 @@ class dctwatermarker(object):
 
         suspectscore = scipy.dot(self.Xstar, self.watermark) / self.XstarRS
         testresult = suspectscore > threshold * self.sigma
-        return {"test": testresult, "stats": (self.sigma, suspectscore)}
+        return testresult, (self.sigma, suspectscore)
+
+    def test_wm(self, wm):
+        """
+            Function which calls self.wm(wm) and the embed function.
+        """
+        self.wm(wm)
+        return self.test()
 
 
 class yiq_dct_image(object):
@@ -164,6 +191,19 @@ class yiq_dct_image(object):
         self.y_dct_sn = in_dctv_s  # idem
         self.y_dct = in_dctv       # vector of values, non-sorted
         self.y_dct_n = in_dctv     # idem
+
+    @classmethod
+    def open(cls, path):
+        """
+            Construct this object from a file, as specified by `path`.
+        """
+        return cls(scipy.misc.imread(path).astype('f'))
+
+    def write(self, path):
+        """
+            Write RGB data to file specified by path.
+        """
+        scipy.misc.imsave(path, self.rgb())
 
     def get_dct_indices(self):
         """

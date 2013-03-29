@@ -4,6 +4,5 @@
 """
 
 if __name__ == "__main__":
-    import watermark.bin
-    watermark.bin.prefixWatermark([-1, 1])
-    watermark.bin.run()
+    from watermark.bin import run
+    run(prefix=[-1, 1])

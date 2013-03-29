@@ -35,13 +35,13 @@ class Tester(object):
             :parameters:
                 target
                     The target file that is being worked on.
-                    Can be an object of type `yiq_dct_image` or it can be a
-                    string to a pathname, in which a `yiq_dct_image` object is 
+                    Can be an object of type `YIQ_DCT_Image` or it can be a
+                    string to a pathname, in which a `YIQ_DCT_Image` object is 
                     constructed using this file.
                 original
                     The original file as used in the embedding procedure.
-                    Can be an object of type `yiq_dct_image` or it can be a
-                    string to a pathname, in which a `yiq_dct_image` object is 
+                    Can be an object of type `YIQ_DCT_Image` or it can be a
+                    string to a pathname, in which a `YIQ_DCT_Image` object is 
                     constructed using this file.
                 alpha
                     This is the alpha parameter, in the paper it determines how
@@ -57,11 +57,11 @@ class Tester(object):
         """
         if (type(target) == str):
             # create the image.
-            target = yiq_dct_image.open(target)
+            target = YIQ_DCT_Image.open(target)
         self.target = target
 
         if (type(original) == str):
-            original = yiq_dct_image.open(original)
+            original = YIQ_DCT_Image.open(original)
         self.original = original
         
         self.target.set_dct_indices(self.original.get_dct_indices())
@@ -153,15 +153,15 @@ class Marker(object):
             :parameters:
                 target
                     The target file that is being worked on.
-                    Can be an object of type `yiq_dct_image` or it can be a
-                    string to a pathname, in which a `yiq_dct_image` object is 
+                    Can be an object of type `YIQ_DCT_Image` or it can be a
+                    string to a pathname, in which a `YIQ_DCT_Image` object is 
                     constructed using this file.
                 original
                     The original file to be used as original in the embedding
                     procedure. When it is not provided it is taken the same as
                     the target file.
-                    Can be an object of type `yiq_dct_image` or it can be a
-                    string to a pathname, in which a `yiq_dct_image` object is 
+                    Can be an object of type `YIQ_DCT_Image` or it can be a
+                    string to a pathname, in which a `YIQ_DCT_Image` object is 
                     constructed using this file.
                 alpha
                     This is the alpha parameter, in the paper it determines how
@@ -177,11 +177,11 @@ class Marker(object):
         """
         if (type(target) == str):
             # create the image.
-            target = yiq_dct_image.open(target)
+            target = YIQ_DCT_Image.open(target)
         self.target = target
 
         if (type(original) == str):
-            original = yiq_dct_image.open(original)
+            original = YIQ_DCT_Image.open(original)
 
         if (original != None):
             self.original = target
@@ -218,7 +218,7 @@ class Marker(object):
 
 
 
-class yiq_dct_image(object):
+class YIQ_DCT_Image(object):
     """
         This class allows for easy manipulation of the DCT coefficients.
 
@@ -321,17 +321,23 @@ class yiq_dct_image(object):
         outdata = yiq_to_rgb_img(yiq_outdata)
         return outdata
 
+    def pixel_count(self):
+        """
+            Returns the number of pixels in the image.
+        """
+        return self.inshape[0] * self.inshape[1]
+
 
 def simple_embed(input_file, output_file, watermark):
-    #input_file = yiq_dct_image(scipy.misc.imread(input_file).astype('f'))
+    #input_file = YIQ_DCT_Image(scipy.misc.imread(input_file).astype('f'))
     mark = Marker(input_file)
     mark.embed(watermark)
     scipy.misc.imsave(output_file, mark.output().rgb())
 
 
 def simple_test(orig_file, target_file, watermark):
-    #orig_file = yiq_dct_image(scipy.misc.imread(orig_file).astype('f'))
-    #target_file = yiq_dct_image(scipy.misc.imread(target_file).astype('f'))
+    #orig_file = YIQ_DCT_Image(scipy.misc.imread(orig_file).astype('f'))
+    #target_file = YIQ_DCT_Image(scipy.misc.imread(target_file).astype('f'))
     tester = Tester(original=orig_file, target=target_file)
     
     return tester.test(watermark)

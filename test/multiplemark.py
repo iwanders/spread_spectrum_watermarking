@@ -28,7 +28,7 @@ create_difference_file = True
 
 input_path="Lenna.bmp"
 output_file="watermarked.png"
-input_file = cox.yiq_dct_image.open(input_path)
+input_file = cox.YIQ_DCT_Image.open(input_path)
 mark = cox.Marker(input_file)
 mark.embed(ourMark1)
 mark.embed(ourMark2)
@@ -47,7 +47,7 @@ print(a.test(watermark=ourMark2))
 # Embed 50 watermarks and test against those.
 
 
-input_file = cox.yiq_dct_image.open(input_path)
+input_file = cox.YIQ_DCT_Image.open(input_path)
 mark = cox.Marker(input_file)
 newwm = []
 
@@ -61,7 +61,7 @@ res = mark.output()
 res.write(output_file)
 
 
-target_image = cox.yiq_dct_image.open(output_file)
+target_image = cox.YIQ_DCT_Image.open(output_file)
 print("new obj")
 tester = cox.Tester(target=target_image,original=input_path)
 

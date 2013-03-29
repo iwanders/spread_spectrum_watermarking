@@ -110,7 +110,7 @@ class dctwatermarker(object):
             Xstar[i] = x
         self.Xstar = Xstar
         self.XstarRS = sqrt(scipy.dot(self.Xstar, self.Xstar))# root square
-        return Xstar
+        return list(Xstar)
 
     def response(self, N=1000):
         """

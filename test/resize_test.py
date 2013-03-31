@@ -32,7 +32,7 @@ create_difference_file = True
 
 #print(ourMark)
 
-#input_path="Lenna.bmp"
+input_path="Lenna.bmp"
 
 lengths = [100, 1000, 2000, 4000, 8000]
 for i in lengths:

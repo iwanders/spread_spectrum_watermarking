@@ -191,7 +191,7 @@ def test(args,**kwargs):
 
     if (args.base != None):
         base_path = args.base
-    #print(base_path)
+    print(base_path)
 
     #files = args.file
     #print(args.file)

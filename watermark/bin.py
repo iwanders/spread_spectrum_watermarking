@@ -4,6 +4,8 @@ __version__ = "0.0.1"
 
 """
     This file behaves like an executable for watermarking files.
+
+    Remember that watermarking a file does NOT conserve the metadata.
 """
 
 

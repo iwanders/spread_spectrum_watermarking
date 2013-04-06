@@ -4,13 +4,13 @@
 """
 
 word = "Ivor Wanders"
-repeat = 10 # If this is even the prefix is exactly averaged to 0.
+repeat = 5 # Number of times to repeat this (actually times two)
 
 wmprefix = []
 
 # convert this into numbers.
 sign = 1
-for i in range(repeat):
+for i in range(repeat*2):
     for letter in word:
         wmprefix.append(sign*(ord(letter)/128.0))
         sign = -sign # flip it every letter

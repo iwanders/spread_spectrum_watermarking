@@ -3,9 +3,11 @@ import scipy
 import scipy.fftpack
 import scipy.signal
 
+from PIL import Image
+
 import random
 from math import sqrt
-from .util import rgb_to_yiq_img, yiq_to_rgb_img
+from watermark.util import rgb_to_yiq_img, yiq_to_rgb_img
 
 def embed_function(v, o, alpha=0.1):
     #Vapos = im.dct_o(i+1) * (1.0 + v * alpha)
@@ -264,13 +266,20 @@ class YIQ_DCT_Image(object):
         """
             Construct this object from a file, as specified by `path`.
         """
-        return cls(scipy.misc.imread(path).astype('f'))
+        with open(path, 'br') as f:
+            im = Image.open(f, mode='r')
+            in_data = scipy.asarray(im, scipy.float64)
+        return cls(in_data)
+        # return cls(scipy.misc.imread(path).astype('f'))
 
     def write(self, path):
         """
             Write RGB data to file specified by path.
-        """
-        scipy.misc.imsave(path, self.rgb())
+        """        
+        i = Image.fromarray(scipy.uint8(self.rgb()))
+        with open(path, 'bw') as f:
+            i.save(path)
+        # scipy.misc.imsave(path, self.rgb())
 
     def get_dct_indices(self):
         """

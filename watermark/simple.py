@@ -5,7 +5,7 @@ import scipy.signal
 
 import random
 from math import sqrt
-from .util import rgb_to_yiq_img, yiq_to_rgb_img
+from watermark.util import rgb_to_yiq_img, yiq_to_rgb_img
 
 
 def embed_file(inputfile, outputfile, watermark, alpha=0.1):

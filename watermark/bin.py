@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 __version__ = "0.0.1"
 
 
@@ -63,9 +63,15 @@ def exit(text):
 
 
 
-def write_watermark(wm,file_wm, file_base=None, file_target=None,alpha=default_alpha, version=__version__, type="JSON"):
+def write_watermark(wm,file_wm, file_base=None, file_target=None,alpha=default_alpha, version=__version__, type="JSON", wm_add_entries={}):
     if (type == "JSON"):
         storage = {"wm":file_wm,"target":file_target,"base":file_base,"version":version,"type":type,"alpha":alpha,"wm":wm,"length":len(wm)}
+        keys_a = set(storage.keys())
+        keys_b = set(wm_add_entries.keys())
+        intersection = keys_a & keys_b # '&' operator is used for set intersection
+        if (len(intersection) != 0):
+            print("Overwriting keys!")
+        storage.update(wm_add_entries)
         import json
         with open(file_wm,'w') as f:
             json.dump(storage, f, indent=True,sort_keys=True)
@@ -80,7 +86,7 @@ def read_watermark(file_wm,type="JSON"):
 
 
 def make_watermark(length,prefix=[]):
-    from cox import random_wm_function
+    from watermark.cox import random_wm_function
     prefixLength = len(prefix)
     desiredlength = length - prefixLength
     watermark = list(prefix)
@@ -90,8 +96,8 @@ def make_watermark(length,prefix=[]):
 
 # sub-command functions
 def embed(args,**kwargs):
-    from cox import Marker, YIQ_DCT_Image, random_wm_function
-    
+    from watermark.cox import Marker, YIQ_DCT_Image, random_wm_function
+    # print(kwargs)
     
     #mark.embed(watermark)
     #scipy.misc.imsave(output_file, mark.output().rgb())
@@ -162,12 +168,12 @@ def embed(args,**kwargs):
             if ((args.force) or confirm('Are you sure you want to overwrite {0}'.format(mark_path))):
                 print("Overwriting...")
                 try:
-                    write_watermark(wm,mark_path,file_base=base_path, file_target=output_path,alpha=args.alpha)
+                    write_watermark(wm,mark_path,file_base=base_path, file_target=output_path,alpha=args.alpha,wm_add_entries=kwargs["wm_add_entries"])
                 except IOError as e:
                     exit(str(e))
         else: # if it doesn't make it.
             try:
-                write_watermark(wm,mark_path,file_base=base_path, file_target=output_path,alpha=args.alpha)
+                write_watermark(wm,mark_path,file_base=base_path, file_target=output_path,alpha=args.alpha,wm_add_entries=kwargs["wm_add_entries"])
             except IOError as e:
                 exit(e)
 
@@ -179,7 +185,7 @@ def embed(args,**kwargs):
 
 
 def test(args,**kwargs):    
-    from cox import Tester, YIQ_DCT_Image
+    from watermark.cox import Tester, YIQ_DCT_Image
 
     wmdata = read_watermark(args.mark,type="JSON")
     length = wmdata["length"]
@@ -284,10 +290,10 @@ parser_help.set_defaults(func=help)
 
 
 
-def run(prefix=[]):
+def run(**kwargs):
     # parse the args and call whatever function was selected
     args = parser.parse_args()
-    args.func(args,prefix=prefix)
+    args.func(args,**kwargs)
 
 if __name__ == "__main__":
     run()

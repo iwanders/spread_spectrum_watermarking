@@ -1,0 +1,8 @@
+[package]
+name = "spread_spectrum_watermarking"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+image = "0.24.3"
+nalgebra = "0.31.1"

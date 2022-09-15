@@ -6,7 +6,6 @@ fn main() {
         std::process::exit(1);
     }
 
-
     let input_image_file = std::env::args().nth(1).expect("no image file specified");
     let image_path = PathBuf::from(&input_image_file);
 

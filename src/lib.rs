@@ -1,4 +1,5 @@
 pub mod yiq;
+pub mod util;
 
 use std::path::PathBuf;
 
@@ -12,6 +13,6 @@ pub fn do_thing(image_path: &PathBuf) {
     // Possible convert of f32?
 
     let img_rgb_f32: image::Rgb32FImage = image::DynamicImage::ImageRgb8(orig_image).into_rgb32f();
-    let v = yiq::image_to_rgb_v(&img_rgb_f32);
+    let v = util::image_to_rgb_v(&img_rgb_f32);
     // println!("v: {v:?}");
 }

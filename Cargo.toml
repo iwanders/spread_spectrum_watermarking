@@ -5,6 +5,5 @@ edition = "2021"
 
 [dependencies]
 image = "0.24.3"
-nalgebra = "0.31.1"
-fft2d = {version = "0.1.0", features=["rustdct", "nalgebra"]}
+fft2d = {version = "0.1.0", features=["rustdct"]}
 #rustdct = "0.7.0"

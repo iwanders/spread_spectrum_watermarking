@@ -1,4 +1,3 @@
-
 pub fn image_to_rgb_v(img: &image::Rgb32FImage) -> na::Matrix3xX<f32> {
     // convert image into (3, N) matrix.
     let samples = img.as_flat_samples();
@@ -15,7 +14,6 @@ pub fn rgb_v_to_image(v: &na::Matrix3xX<f32>, width: u32, height: u32) -> image:
     image::Rgb32FImage::from_raw(width, height, v.as_slice().to_vec())
         .expect("Should fit in memory.")
 }
-
 
 #[cfg(test)]
 mod tests {

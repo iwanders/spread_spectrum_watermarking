@@ -25,8 +25,7 @@ pub fn yiq_v_to_rgb_v(yiq_v: &na::Matrix3xX<f32>) -> na::Matrix3xX<f32> {
     let mut res = YIQ_TO_RGB_MATRIX * yiq_v;
 
     // Bound rgb back to to [0.0, 1.0], this is probably the expensive part.
-    for mut column in res.column_iter_mut() 
-    {
+    for mut column in res.column_iter_mut() {
         column.x = column.x.clamp(0.0, 1.0);
         column.y = column.y.clamp(0.0, 1.0);
         column.z = column.z.clamp(0.0, 1.0);
@@ -34,7 +33,6 @@ pub fn yiq_v_to_rgb_v(yiq_v: &na::Matrix3xX<f32>) -> na::Matrix3xX<f32> {
 
     res
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -44,17 +42,22 @@ mod tests {
         if a.len() != b.len() {
             assert!(false, "a and b are not equal length");
         }
-        for delta in a.iter().zip(b.iter()).map(|(av, bv)| { (av - bv).abs()}) {
+        for delta in a.iter().zip(b.iter()).map(|(av, bv)| (av - bv).abs()) {
             if delta > max_error {
-                assert!(false, "delta was {delta}, this exceeded allowed {max_error}.");
+                assert!(
+                    false,
+                    "delta was {delta}, this exceeded allowed {max_error}."
+                );
             }
         }
-
     }
 
     #[test]
     fn test_yiq_to_rgb() {
-        let colors_orig = na::Matrix3xX::<f32>::from_columns(&[na::Vector3::new(0.1, 0.3, 0.7), na::Vector3::new(0.5, 0.5, 0.5)]);
+        let colors_orig = na::Matrix3xX::<f32>::from_columns(&[
+            na::Vector3::new(0.1, 0.3, 0.7),
+            na::Vector3::new(0.5, 0.5, 0.5),
+        ]);
         let colors_yiq = rgb_v_to_yiq_v(&colors_orig);
         let colors_rgb = yiq_v_to_rgb_v(&colors_yiq);
         approx_equal(&colors_orig.as_slice(), &colors_rgb.as_slice(), 0.000001);

@@ -25,9 +25,9 @@ pub fn do_thing(image_path: &PathBuf) {
     let mut y_channel: na::DVector<f32> =
         na::DVector::from_iterator(yiq_v.shape().1, yiq_v.row(0).iter().map(|x| *x));
 
-    // let mut y_channel = y_channel.reshape_generic(w, h);
-    // dct_2d(y_channel);
-    println!("y_channel: {y_channel:?}");
+    let mut y_channel = y_channel.reshape_generic(nalgebra::base::dimension::Dynamic::new(w as usize), nalgebra::base::dimension::Dynamic::new(h as usize));
+    dct_2d(y_channel);
+    // println!("y_channel: {y_channel:?}");
 
     let y_img = image::GrayImage::from_raw(
         w,

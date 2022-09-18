@@ -132,16 +132,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "fft2d"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8cff68a3c40e36f8377f7b3b5ba9925a24d1d769cc690f5d344a28e798057a52"
-dependencies = [
- "rustdct",
- "rustfft 6.0.1",
-]
-
-[[package]]
 name = "flate2"
 version = "1.0.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -311,15 +301,6 @@ dependencies = [
 
 [[package]]
 name = "num-complex"
-version = "0.3.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "747d632c0c558b87dbabbe6a82f3b4ae03720d0646ac5b7b4dae89394be5f2c5"
-dependencies = [
- "num-traits",
-]
-
-[[package]]
-name = "num-complex"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7ae39348c8bc5fbd7f40c727a9925f03517afd2ab27d46702108b6a7e5414c19"
@@ -458,25 +439,11 @@ dependencies = [
 
 [[package]]
 name = "rustdct"
-version = "0.6.0"
+version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fadcb505b98aa64da1dadb1498b912e3642aae4606623cb3ae952cd8da33f80d"
+checksum = "620247053ace0eddd3e607c66423537e45c3ae36008e6d6fac1552f51ea1a63a"
 dependencies = [
- "rustfft 5.1.1",
-]
-
-[[package]]
-name = "rustfft"
-version = "5.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1869bb2a6ff77380d52ff4bc631f165637035a55855c76aa462c85474dadc42f"
-dependencies = [
- "num-complex 0.3.1",
- "num-integer",
- "num-traits",
- "primal-check",
- "strength_reduce",
- "transpose",
+ "rustfft",
 ]
 
 [[package]]
@@ -485,7 +452,7 @@ version = "6.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b1d089e5c57521629a59f5f39bca7434849ff89bd6873b521afe389c1c602543"
 dependencies = [
- "num-complex 0.4.2",
+ "num-complex",
  "num-integer",
  "num-traits",
  "primal-check",
@@ -524,8 +491,8 @@ dependencies = [
 name = "spread_spectrum_watermarking"
 version = "0.1.0"
 dependencies = [
- "fft2d",
  "image",
+ "rustdct",
 ]
 
 [[package]]

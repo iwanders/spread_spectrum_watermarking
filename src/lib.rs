@@ -1,11 +1,10 @@
 // pub mod util;
 pub mod yiq;
+pub mod dct2d;
 
 use std::path::PathBuf;
 
-// extern crate nalgebra as na;
-
-// use fft2d::nalgebra::dcst::{dct_2d, idct_2d};
+// use fft2d::slice::dcst::{dct_2d, idct_2d};
 use image::GrayImage;
 
 pub fn do_thing(image_path: &PathBuf) {
@@ -14,11 +13,18 @@ pub fn do_thing(image_path: &PathBuf) {
         .to_rgb8();
 
     // Possible convert of f32?
-    let w = orig_image.width();
-    let h = orig_image.height();
+    let width = orig_image.width();
+    let height = orig_image.height();
 
     let img_rgb_f32: image::Rgb32FImage = image::DynamicImage::ImageRgb8(orig_image).into_rgb32f();
     // let rgb_v = util::image_to_rgb_v(&img_rgb_f32);
+
+    let img_yiq_f32: yiq::YIQ32FImage = (&img_rgb_f32).into();
+
+    let mut y_channel = img_yiq_f32.y().as_raw().to_vec();
+
+    // dct_2d(width as usize, height as usize, &mut y_channel);
+
 
     // let yiq_v = yiq::rgb_v_to_yiq_v(&rgb_v);
 

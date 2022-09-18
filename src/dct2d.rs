@@ -72,52 +72,56 @@ pub fn dct2_2d<T: DctNum + std::ops::Mul>(
     let mut scratch: Vec<T> = Vec::<T>::new();
 
     for current in [first, second] {
-
-        let iter_max;
-        let step;
-        let take;
-        let skip_mult;
-        match current {
-            Direction::Row => {
-                iter_max = height;
-                step = 1;
-                skip_mult = width;
-                take = width;
-            }
-
-            Direction::Column => {
-                iter_max = width;
-                step = width;
-                skip_mult = 1;
-                take = height;
-            }
-        }
-        let length = take;
-
+        let length = if first == Direction::Row {
+            width
+        } else {
+            height
+        };
         let dct = planner.plan_dct2(length);
         tmp.resize(length, T::zero());
         scratch.resize(dct.get_scratch_len(), T::zero());
 
-        // Generalised iteration.
-        for i in 0..iter_max {
-            // Copy the row into tmp.
-            let mut row_iter = data.iter().skip(i * skip_mult).step_by(step).take(take);
-            let _ = row_iter
-                .zip(tmp.iter_mut())
-                .map(|(orig, out)| *out = *orig)
-                .collect::<()>();
+        match current {
+            Direction::Row => {
+                for row in 0..height {
+                    // Copy the row into tmp.
+                    let mut row_iter = data.iter().skip(row * width).step_by(1).take(width);
+                    let _ = row_iter
+                        .zip(tmp.iter_mut())
+                        .map(|(orig, out)| *out = *orig)
+                        .collect::<()>();
 
-            // Perform dct on the row.
-            // println!("Row: {row} -> tmp: {tmp:?}");
-            dct.process_dct2_with_scratch(&mut tmp, &mut scratch);
+                    // Perform dct on the row.
+                    // println!("Row: {row} -> tmp: {tmp:?}");
+                    dct.process_dct2_with_scratch(&mut tmp, &mut scratch);
 
-            // Copy tmp back into the data, overwriting the original input.
-            // Do note we apply scaling by a factor of two here.
-            let mut row_iter_mut = data.iter_mut().skip(i * skip_mult).step_by(step).take(take);
-            let _ = row_iter_mut
-                .zip(tmp.iter())
-                .map(|(data_dct, result)| *data_dct = T::two() * *result)
-                .collect::<()>();
+                    // Copy tmp back into the data, overwriting the original input.
+                    // Do note we apply scaling by a factor of two here.
+                    let mut row_iter_mut = data.iter_mut().skip(row * width).step_by(1).take(width);
+                    let _ = row_iter_mut
+                        .zip(tmp.iter())
+                        .map(|(data_dct, result)| *data_dct = T::two() * *result)
+                        .collect::<()>();
+                }
+            }
+
+            Direction::Column => {
+                for column in 0..width {
+                    let mut col_iter = data.iter().skip(column).step_by(width).take(height);
+                    let _ = col_iter
+                        .zip(tmp.iter_mut())
+                        .map(|(orig, out)| *out = *orig)
+                        .collect::<()>();
+                    // println!("column: {column} -> tmp: {tmp:?}");
+                    dct.process_dct2_with_scratch(&mut tmp, &mut scratch);
+                    // Do note we apply scaling by a factor of two here.
+                    let col_iter_mut = data.iter_mut().skip(column).step_by(width).take(height);
+                    let _ = col_iter_mut
+                        .zip(tmp.iter())
+                        .map(|(data_dct, result)| *data_dct = T::two() * *result)
+                        .collect::<()>();
+                }
+            }
         }
         // println!("After {current:?}: -> data: {data:?}");
     }

@@ -245,7 +245,7 @@ mod tests {
         let mut intermediate = input.clone();
         let mut planner = DctPlanner::new();
         dct2_2d(&mut planner, Type::DCT2, 3, 3, &mut intermediate);
-        println!("{input:?}");
+        // println!("{input:?}");
 
         /*
         In python;
@@ -274,7 +274,7 @@ mod tests {
         let mut intermediate = input.clone();
         let mut planner = DctPlanner::new();
         dct2_2d(&mut planner, Type::DCT2, 3, 3, &mut intermediate);
-        println!("{input:?}");
+        // println!("{input:?}");
 
         /*
         In python;
@@ -309,8 +309,8 @@ mod tests {
             N = input.shape[0] * input.shape[1]
             print("y_outdata:\n", ", ".join(str(v) for v in [v * 1.0 / (2 * (2 * N)) for v in y_outdata.flatten()]))
         */
-        const width: usize = 4;
-        const height: usize = 5;
+        const WIDTH: usize = 4;
+        const HEIGHT: usize = 5;
         let input = [
             0.5488135039273248,
             0.7151893663724195,
@@ -335,7 +335,7 @@ mod tests {
         ];
         let mut intermediate = input.clone();
         let mut planner = DctPlanner::new();
-        dct2_2d(&mut planner, Type::DCT2, width, height, &mut intermediate);
+        dct2_2d(&mut planner, Type::DCT2, WIDTH, HEIGHT, &mut intermediate);
 
         let dct = [
             46.524385961807795,
@@ -361,7 +361,7 @@ mod tests {
         ];
         approx_equal(&intermediate, &dct, 0.0001);
 
-        dct2_2d(&mut planner, Type::DCT3, width, height, &mut intermediate);
+        dct2_2d(&mut planner, Type::DCT3, WIDTH, HEIGHT, &mut intermediate);
         approx_equal(&intermediate, &input, 0.0001);
     }
 }

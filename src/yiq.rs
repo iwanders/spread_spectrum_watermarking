@@ -65,6 +65,11 @@ impl YIQ32FImage {
         &self.y
     }
 
+    /// Accessor for the luma.
+    pub fn y_mut<'a>(&'a mut self) -> &mut Luma32FImage {
+        &mut self.y
+    }
+
     /// Accessor for I component.
     pub fn i<'a>(&'a self) -> &Luma32FImage {
         &self.i

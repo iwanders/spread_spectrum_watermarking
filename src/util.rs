@@ -1,4 +1,3 @@
-
 pub fn dump_buffer_as_image(width: u32, height: u32, data: &[f32], path: &std::path::Path) {
     // Skip DC gain to ensure we get something that's remotely viewable.
     let min = data.iter().skip(1).min_by(|a, b| a.total_cmp(b)).unwrap();

@@ -2,6 +2,9 @@
 use rustdct::DctPlanner;
 use rustdct::DctNum;
 
+// https://github.com/mpizenberg/fft2d exists, but it doesn't handle f32s, which seems to be more
+// than sufficient and would allow more simd instructions.
+
 /*
 This file implements the following python code:
 
@@ -35,6 +38,58 @@ y_outdata = idct(idct(out_dct).transpose(1, 0)).transpose(0,
 # Step 8, recompose the Y component with its IQ components.
 yiq_outdata = self.yiq
 */
+
+#[derive(PartialEq, Debug, Copy, Clone)]
+enum Direction{Row, Column}
+/// Perform a discrete cosine transform of type II.
+/// Data is assumed to be ordered row first and will be overwritten with the result.
+pub fn dct2_2d<T: DctNum + std::ops::Mul>(planner: &mut rustdct::DctPlanner<T>, width: usize, height: usize, data: &mut [T]) {
+    assert_eq!(data.len(), (width * height));
+    // The order of rows / columns and then columns / rows does not matter.
+    // We can do the largest dimension first, to allow reuse of the scratch buffer.
+    let first = if width >= height { Direction::Row } else { Direction::Column };
+    let second = if first == Direction::Row { Direction::Column } else { Direction::Row };
+
+    // Allocate the vector we'll use for the intermediate row / column storage.
+    let mut tmp: Vec<T> = Vec::<T>::new();
+
+
+    // Allocate the scratch buffer.
+    let mut scratch: Vec<T> = Vec::<T>::new();
+
+    for current in [first, second] {
+        let length = if first == Direction::Row { width } else { height };
+        let dct = planner.plan_dct2(length);
+        tmp.resize(length, T::zero());
+        scratch.resize(dct.get_scratch_len(), T::zero());
+        match current {
+            Direction::Row => {
+                for row in 0..height {
+                    // Copy the row into tmp.
+                    let _ = data.iter().skip(row * width).step_by(1).take(width).zip(tmp.iter_mut()).map(|(orig, out)|{*out = *orig}).collect::<()>();
+
+                    // Perform dct on the row.
+                    println!("Row: {row} -> tmp: {tmp:?}");
+                    dct.process_dct2_with_scratch(&mut tmp, &mut scratch);
+
+                    // Copy tmp back into the data, overwriting the original input.
+                    let _ = data.iter_mut().skip(row * width).step_by(1).take(width).zip(tmp.iter()).map(|(data_dct, result)|{*data_dct = T::two() * *result}).collect::<()>();
+                }
+            },
+            
+            Direction::Column => {
+                for column in 0..width {
+                    let _ = data.iter().skip(column).step_by(width).take(height).zip(tmp.iter_mut()).map(|(orig, out)|{*out = *orig}).collect::<()>();
+                    println!("column: {column} -> tmp: {tmp:?}");
+                    dct.process_dct2_with_scratch(&mut tmp, &mut scratch);
+                    let _ = data.iter_mut().skip(column).step_by(width).take(height).zip(tmp.iter()).map(|(data_dct, result)|{*data_dct = T::two() * *result}).collect::<()>();
+                }
+            },
+            
+        }
+        println!("After {current:?}: -> data: {data:?}");
+    }
+}
 
 
 #[cfg(test)]
@@ -92,5 +147,28 @@ mod tests {
         approx_equal(&input, &v_f32, 0.0001);
         // Ok, so different scaling from scipy after the type 2 transform, and we need to account for
         // the total 2/N operation.
+    }
+    #[test]
+    fn test_2d_dct_against_scipy() {
+        #[rustfmt::skip]
+        let z = [1.0f32, 0.0, 0.0,
+                 1.0f32, 0.0, 0.0,
+                 0.0f32, 0.0, 1.0];
+        let mut input = z.clone();
+        let mut planner = DctPlanner::new();
+        dct2_2d(&mut planner, 3, 3, &mut input);
+        println!("{input:?}");
+
+        /*
+        In python;
+        dct = lambda x: scipy.fftpack.dct(x)
+        in_dct = dct(dct(ident).transpose(1, 0)).transpose(0,
+                                                    1).transpose(1, 0)
+        */
+        #[rustfmt::skip]
+        let res = [12f32, 3.46410162, 6.0,
+                     0.0, 6.0, 0.0,
+                    0.0, -3.46410162, 0.0];
+        approx_equal(&input, &res, 0.0001);
     }
 }

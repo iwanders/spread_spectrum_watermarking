@@ -43,10 +43,16 @@ enum Direction {
     Row,
     Column,
 }
+
+pub enum Type {
+    DCT2,
+    DCT3,
+}
 /// Perform a discrete cosine transform of type II.
 /// Data is assumed to be ordered row first and will be overwritten with the result.
 pub fn dct2_2d<T: DctNum + std::ops::Mul>(
     planner: &mut rustdct::DctPlanner<T>,
+    transform_type: Type,
     width: usize,
     height: usize,
     data: &mut [T],
@@ -71,13 +77,21 @@ pub fn dct2_2d<T: DctNum + std::ops::Mul>(
     // Allocate the scratch buffer.
     let mut scratch: Vec<T> = Vec::<T>::new();
 
+    let scaling = match transform_type {
+        Type::DCT2 => T::two(),
+        Type::DCT3 => T::half(),
+    };
+
     for current in [first, second] {
         let length = if first == Direction::Row {
             width
         } else {
             height
         };
-        let dct = planner.plan_dct2(length);
+        let dct = match transform_type {
+            Type::DCT2 => planner.plan_dct2(length),
+            Type::DCT3 => planner.plan_dct3(length),
+        };
         tmp.resize(length, T::zero());
         scratch.resize(dct.get_scratch_len(), T::zero());
 
@@ -93,14 +107,17 @@ pub fn dct2_2d<T: DctNum + std::ops::Mul>(
 
                     // Perform dct on the row.
                     // println!("Row: {row} -> tmp: {tmp:?}");
-                    dct.process_dct2_with_scratch(&mut tmp, &mut scratch);
+                    match transform_type {
+                        Type::DCT2 => dct.process_dct2_with_scratch(&mut tmp, &mut scratch),
+                        Type::DCT3 => dct.process_dct3_with_scratch(&mut tmp, &mut scratch),
+                    }
 
                     // Copy tmp back into the data, overwriting the original input.
                     // Do note we apply scaling by a factor of two here.
                     let mut row_iter_mut = data.iter_mut().skip(row * width).step_by(1).take(width);
                     let _ = row_iter_mut
                         .zip(tmp.iter())
-                        .map(|(data_dct, result)| *data_dct = T::two() * *result)
+                        .map(|(data_dct, result)| *data_dct = scaling * *result)
                         .collect::<()>();
                 }
             }
@@ -113,18 +130,29 @@ pub fn dct2_2d<T: DctNum + std::ops::Mul>(
                         .map(|(orig, out)| *out = *orig)
                         .collect::<()>();
                     // println!("column: {column} -> tmp: {tmp:?}");
-                    dct.process_dct2_with_scratch(&mut tmp, &mut scratch);
+                    match transform_type {
+                        Type::DCT2 => dct.process_dct2_with_scratch(&mut tmp, &mut scratch),
+                        Type::DCT3 => dct.process_dct3_with_scratch(&mut tmp, &mut scratch),
+                    }
                     // Do note we apply scaling by a factor of two here.
                     let col_iter_mut = data.iter_mut().skip(column).step_by(width).take(height);
                     let _ = col_iter_mut
                         .zip(tmp.iter())
-                        .map(|(data_dct, result)| *data_dct = T::two() * *result)
+                        .map(|(data_dct, result)| *data_dct = scaling * *result)
                         .collect::<()>();
                 }
             }
         }
         // println!("After {current:?}: -> data: {data:?}");
     }
+    match transform_type {
+        Type::DCT2 => {},
+        Type::DCT3 => {
+            // Multiply by the correction factor.
+            let scaling = T::from_usize(4).unwrap() / T::from_usize(width * height).unwrap();
+            data.iter_mut().map(|z| { *z = *z * scaling }).collect::<()>();
+        },
+    };
 }
 
 #[cfg(test)]
@@ -192,12 +220,12 @@ mod tests {
     #[test]
     fn test_2d_dct_against_scipy() {
         #[rustfmt::skip]
-        let z = [1.0f32, 0.0, 0.0,
-                 1.0f32, 0.0, 0.0,
-                 0.0f32, 0.0, 1.0];
-        let mut input = z.clone();
+        let input = [1.0f32, 0.0, 0.0,
+                     1.0f32, 0.0, 0.0,
+                     0.0f32, 0.0, 1.0];
+        let mut intermediate = input.clone();
         let mut planner = DctPlanner::new();
-        dct2_2d(&mut planner, 3, 3, &mut input);
+        dct2_2d(&mut planner, Type::DCT2, 3, 3, &mut intermediate);
         println!("{input:?}");
 
         /*
@@ -210,6 +238,9 @@ mod tests {
         let res = [12f32, 3.46410162, 6.0,
                      0.0, 6.0, 0.0,
                     0.0, -3.46410162, 0.0];
-        approx_equal(&input, &res, 0.0001);
+        approx_equal(&intermediate, &res, 0.0001);
+
+        dct2_2d(&mut planner, Type::DCT3, 3, 3, &mut intermediate);
+        approx_equal(&intermediate, &input, 0.0001);
     }
 }

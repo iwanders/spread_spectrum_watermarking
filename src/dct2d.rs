@@ -44,8 +44,22 @@ enum Direction {
     Column,
 }
 
+impl std::ops::Not for Direction {
+    type Output = Direction;
+    fn not(self) -> <Self as std::ops::Not>::Output {
+        if self == Direction::Column {
+            Direction::Row
+        } else {
+            Direction::Column
+        }
+    }
+}
+
+/// The type of transform to perform.
 pub enum Type {
+    /// Type II discrete cosine transform, scaling as per scipy's definition.
     DCT2,
+    /// Type III discrete cosine transform, scaling to be the inverse of DCT2.
     DCT3,
 }
 
@@ -66,11 +80,7 @@ pub fn dct2_2d<T: DctNum + std::ops::Mul>(
     } else {
         Direction::Column
     };
-    let second = if first == Direction::Row {
-        Direction::Column
-    } else {
-        Direction::Row
-    };
+    let second = !first;
 
     // Allocate the vector we'll use for the intermediate row / column storage.
     let mut tmp: Vec<T> = Vec::<T>::new();
@@ -84,8 +94,7 @@ pub fn dct2_2d<T: DctNum + std::ops::Mul>(
         Type::DCT3 => T::half(),
     };
 
-    // for current in [first, second] {
-    for current in [Direction::Row, Direction::Column] {
+    for current in [first, second] {
         let length = if current == Direction::Row {
             width
         } else {

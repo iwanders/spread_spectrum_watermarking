@@ -24,7 +24,7 @@ impl<'a> Iterator for YIQ32FIterator<'a> {
     }
 }
 
-/// Mutable iterator for [`Luma32FImage`] to allow iterating over all three channels at the same 
+/// Mutable iterator for [`Luma32FImage`] to allow iterating over all three channels at the same
 /// time.
 pub struct YIQ32FIteratorMut<'a>(
     Luma32FIteratorMut<'a>,
@@ -161,12 +161,12 @@ const YIQ_TO_RGB_MATRIX: Matrix3x3 = Matrix3x3::new(1.0,  0.948262,  0.624013,  
                                                     1.0, -1.105450,  1.729860); // b
 
 /// Function to convert an rgb array to an yiq array.
-fn rgb_to_yiq(rgb: &[f32]) -> [f32; 3]{
+fn rgb_to_yiq(rgb: &[f32]) -> [f32; 3] {
     RGB_TO_YIQ_MATRIX.product(rgb)
 }
 
 /// Function to convert an yiq array to an rgb array.
-fn yiq_to_rgb(yiq: &[f32]) -> [f32; 3]{
+fn yiq_to_rgb(yiq: &[f32]) -> [f32; 3] {
     YIQ_TO_RGB_MATRIX.product_clamp(yiq, 0.0, 1.0)
 }
 
@@ -216,7 +216,6 @@ mod tests {
         let yiq = [0.3f32, 0.6, 0.21];
         approx_equal(&yiq, &rgb_to_yiq(&rgb), 0.0001);
         approx_equal(&rgb, &yiq_to_rgb(&yiq), 0.0001);
-
 
         let rgb = [0.0f32, 1.0, 0.0];
         let yiq = [0.59f32, -0.28, -0.52];

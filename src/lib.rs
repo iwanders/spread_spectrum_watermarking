@@ -1,6 +1,6 @@
 // pub mod util;
-pub mod yiq;
 pub mod dct2d;
+pub mod yiq;
 
 use std::path::PathBuf;
 
@@ -24,7 +24,6 @@ pub fn do_thing(image_path: &PathBuf) {
     let mut y_channel = img_yiq_f32.y().as_raw().to_vec();
 
     // dct_2d(width as usize, height as usize, &mut y_channel);
-
 
     // let yiq_v = yiq::rgb_v_to_yiq_v(&rgb_v);
 

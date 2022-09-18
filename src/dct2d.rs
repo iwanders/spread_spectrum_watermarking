@@ -1,6 +1,5 @@
-
-use rustdct::DctPlanner;
 use rustdct::DctNum;
+use rustdct::DctPlanner;
 
 // https://github.com/mpizenberg/fft2d exists, but it doesn't handle f32s, which seems to be more
 // than sufficient and would allow more simd instructions.
@@ -40,63 +39,101 @@ yiq_outdata = self.yiq
 */
 
 #[derive(PartialEq, Debug, Copy, Clone)]
-enum Direction{Row, Column}
+enum Direction {
+    Row,
+    Column,
+}
 /// Perform a discrete cosine transform of type II.
 /// Data is assumed to be ordered row first and will be overwritten with the result.
-pub fn dct2_2d<T: DctNum + std::ops::Mul>(planner: &mut rustdct::DctPlanner<T>, width: usize, height: usize, data: &mut [T]) {
+pub fn dct2_2d<T: DctNum + std::ops::Mul>(
+    planner: &mut rustdct::DctPlanner<T>,
+    width: usize,
+    height: usize,
+    data: &mut [T],
+) {
     assert_eq!(data.len(), (width * height));
     // The order of rows / columns and then columns / rows does not matter.
     // We can do the largest dimension first, to allow reuse of the scratch buffer.
-    let first = if width >= height { Direction::Row } else { Direction::Column };
-    let second = if first == Direction::Row { Direction::Column } else { Direction::Row };
+    let first = if width >= height {
+        Direction::Row
+    } else {
+        Direction::Column
+    };
+    let second = if first == Direction::Row {
+        Direction::Column
+    } else {
+        Direction::Row
+    };
 
     // Allocate the vector we'll use for the intermediate row / column storage.
     let mut tmp: Vec<T> = Vec::<T>::new();
-
 
     // Allocate the scratch buffer.
     let mut scratch: Vec<T> = Vec::<T>::new();
 
     for current in [first, second] {
-        let length = if first == Direction::Row { width } else { height };
+
+        let iter_max;
+        let step;
+        let take;
+        let skip_mult;
+        match current {
+            Direction::Row => {
+                iter_max = height;
+                step = 1;
+                skip_mult = width;
+                take = width;
+            }
+
+            Direction::Column => {
+                iter_max = width;
+                step = width;
+                skip_mult = 1;
+                take = height;
+            }
+        }
+        let length = take;
+
         let dct = planner.plan_dct2(length);
         tmp.resize(length, T::zero());
         scratch.resize(dct.get_scratch_len(), T::zero());
-        match current {
-            Direction::Row => {
-                for row in 0..height {
-                    // Copy the row into tmp.
-                    let _ = data.iter().skip(row * width).step_by(1).take(width).zip(tmp.iter_mut()).map(|(orig, out)|{*out = *orig}).collect::<()>();
 
-                    // Perform dct on the row.
-                    println!("Row: {row} -> tmp: {tmp:?}");
-                    dct.process_dct2_with_scratch(&mut tmp, &mut scratch);
+        // Generalised iteration.
+        for i in 0..iter_max {
+            // Copy the row into tmp.
+            let mut row_iter = data.iter().skip(i * skip_mult).step_by(step).take(take);
+            let _ = row_iter
+                .zip(tmp.iter_mut())
+                .map(|(orig, out)| *out = *orig)
+                .collect::<()>();
 
-                    // Copy tmp back into the data, overwriting the original input.
-                    let _ = data.iter_mut().skip(row * width).step_by(1).take(width).zip(tmp.iter()).map(|(data_dct, result)|{*data_dct = T::two() * *result}).collect::<()>();
-                }
-            },
-            
-            Direction::Column => {
-                for column in 0..width {
-                    let _ = data.iter().skip(column).step_by(width).take(height).zip(tmp.iter_mut()).map(|(orig, out)|{*out = *orig}).collect::<()>();
-                    println!("column: {column} -> tmp: {tmp:?}");
-                    dct.process_dct2_with_scratch(&mut tmp, &mut scratch);
-                    let _ = data.iter_mut().skip(column).step_by(width).take(height).zip(tmp.iter()).map(|(data_dct, result)|{*data_dct = T::two() * *result}).collect::<()>();
-                }
-            },
-            
+            // Perform dct on the row.
+            // println!("Row: {row} -> tmp: {tmp:?}");
+            dct.process_dct2_with_scratch(&mut tmp, &mut scratch);
+
+            // Copy tmp back into the data, overwriting the original input.
+            // Do note we apply scaling by a factor of two here.
+            let mut row_iter_mut = data.iter_mut().skip(i * skip_mult).step_by(step).take(take);
+            let _ = row_iter_mut
+                .zip(tmp.iter())
+                .map(|(data_dct, result)| *data_dct = T::two() * *result)
+                .collect::<()>();
         }
-        println!("After {current:?}: -> data: {data:?}");
+        // println!("After {current:?}: -> data: {data:?}");
     }
 }
-
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    fn approx_equal<T: DctNum + std::cmp::PartialOrd + std::fmt::Display> (a: &[T], b: &[T], max_error: T) where T: std::ops::Sub<T> {
+    fn approx_equal<T: DctNum + std::cmp::PartialOrd + std::fmt::Display>(
+        a: &[T],
+        b: &[T],
+        max_error: T,
+    ) where
+        T: std::ops::Sub<T>,
+    {
         if a.len() != b.len() {
             assert!(false, "a and b are not equal length");
         }
@@ -127,9 +164,9 @@ mod tests {
 
         let input = [1.0f32, 0.0, 0.0];
         let expected = [2.0f32, 1.73205081, 1.0];
-        let expected = expected.iter().map(|x| { x / 2.0 }).collect::<Vec<f32>>();
+        let expected = expected.iter().map(|x| x / 2.0).collect::<Vec<f32>>();
         let mut v_f32 = input.clone();
-        
+
         let mut planner = DctPlanner::new();
         let dct = planner.plan_dct2(v_f32.len());
         dct.process_dct2(&mut v_f32);

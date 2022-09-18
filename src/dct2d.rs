@@ -48,6 +48,7 @@ pub enum Type {
     DCT2,
     DCT3,
 }
+
 /// Perform a discrete cosine transform of type II.
 /// Data is assumed to be ordered row first and will be overwritten with the result.
 pub fn dct2_2d<T: DctNum + std::ops::Mul>(
@@ -77,6 +78,7 @@ pub fn dct2_2d<T: DctNum + std::ops::Mul>(
     // Allocate the scratch buffer.
     let mut scratch: Vec<T> = Vec::<T>::new();
 
+    // T::two(), T::half(),
     let scaling = match transform_type {
         Type::DCT2 => T::two(),
         Type::DCT3 => T::half(),
@@ -106,7 +108,7 @@ pub fn dct2_2d<T: DctNum + std::ops::Mul>(
                         .collect::<()>();
 
                     // Perform dct on the row.
-                    // println!("Row: {row} -> tmp: {tmp:?}");
+                    println!("Row: {row} -> tmp: {tmp:?}");
                     match transform_type {
                         Type::DCT2 => dct.process_dct2_with_scratch(&mut tmp, &mut scratch),
                         Type::DCT3 => dct.process_dct3_with_scratch(&mut tmp, &mut scratch),
@@ -129,7 +131,7 @@ pub fn dct2_2d<T: DctNum + std::ops::Mul>(
                         .zip(tmp.iter_mut())
                         .map(|(orig, out)| *out = *orig)
                         .collect::<()>();
-                    // println!("column: {column} -> tmp: {tmp:?}");
+                    println!("column: {column} -> tmp: {tmp:?}");
                     match transform_type {
                         Type::DCT2 => dct.process_dct2_with_scratch(&mut tmp, &mut scratch),
                         Type::DCT3 => dct.process_dct3_with_scratch(&mut tmp, &mut scratch),
@@ -143,15 +145,15 @@ pub fn dct2_2d<T: DctNum + std::ops::Mul>(
                 }
             }
         }
-        // println!("After {current:?}: -> data: {data:?}");
+        println!("After {current:?}: -> data: {data:?}");
     }
     match transform_type {
-        Type::DCT2 => {},
+        Type::DCT2 => {}
         Type::DCT3 => {
             // Multiply by the correction factor.
             let scaling = T::from_usize(4).unwrap() / T::from_usize(width * height).unwrap();
-            data.iter_mut().map(|z| { *z = *z * scaling }).collect::<()>();
-        },
+            data.iter_mut().map(|z| *z = *z * scaling).collect::<()>();
+        }
     };
 }
 
@@ -217,6 +219,7 @@ mod tests {
         // Ok, so different scaling from scipy after the type 2 transform, and we need to account for
         // the total 2/N operation.
     }
+
     #[test]
     fn test_2d_dct_against_scipy() {
         #[rustfmt::skip]
@@ -238,7 +241,79 @@ mod tests {
         let res = [12f32, 3.46410162, 6.0,
                      0.0, 6.0, 0.0,
                     0.0, -3.46410162, 0.0];
+        // This now checks the resulting dct.
         approx_equal(&intermediate, &res, 0.0001);
+
+        // Check whether the inverse works.
+        dct2_2d(&mut planner, Type::DCT3, 3, 3, &mut intermediate);
+        approx_equal(&intermediate, &input, 0.0001);
+    }
+    #[test]
+    fn test_2d_dct_against_scipy_larger() {
+        /*
+            np.random.seed(0)
+            input = np.random.rand(5,4)
+            print("Input:", ", ".join(str(v) for v in input.flatten()))
+            dct = lambda x: scipy.fftpack.dct(x) #
+            dct_res = dct(dct(input).transpose(1, 0)).transpose(0, 1).transpose(1, 0)
+            print("dct_res:", ", ".join(str(v) for v in dct_res.flatten()))
+
+            idct = lambda x: scipy.fftpack.idct(x)
+            y_outdata = idct(idct(dct_res).transpose(1, 0)).transpose(0, 1).transpose(1, 0)
+            N = input.shape[0] * input.shape[1]
+            print("y_outdata:\n", ", ".join(str(v) for v in [v * 1.0 / (2 * (2 * N)) for v in y_outdata.flatten()]))
+        */
+        const width: usize = 4;
+        const height: usize = 5;
+        let input = [
+            0.5488135039273248,
+            0.7151893663724195,
+            0.6027633760716439,
+            0.5448831829968969,
+            0.4236547993389047,
+            0.6458941130666561,
+            0.4375872112626925,
+            0.8917730007820798,
+            0.9636627605010293,
+            0.3834415188257777,
+            0.7917250380826646,
+            0.5288949197529045,
+            0.5680445610939323,
+            0.925596638292661,
+            0.07103605819788694,
+            0.08712929970154071,
+            0.02021839744032572,
+            0.832619845547938,
+            0.7781567509498505,
+            0.8700121482468192f32,
+        ];
+        let mut intermediate = input.clone();
+        let mut planner = DctPlanner::new();
+        dct2_2d(&mut planner, Type::DCT2, 3, 3, &mut intermediate);
+
+        let dct = [
+            46.524385961807795,
+            -0.21446293403712835,
+            -2.0843339718842815,
+            -3.645457533538471,
+            1.4166065434940998,
+            0.4419965603948456,
+            2.288307908216848,
+            1.5890322015748601,
+            0.21983372685723102,
+            -3.821328988830812,
+            -2.963939623448115,
+            -2.5130780082258877,
+            -3.0522396424586775,
+            6.182928982512843,
+            -0.7173709109389592,
+            -0.24751013051495963,
+            3.6348831175770964,
+            -1.2597998124722949,
+            0.32252151855415545,
+            4.745483123369016f32,
+        ];
+        approx_equal(&intermediate, &dct, 0.0001);
 
         dct2_2d(&mut planner, Type::DCT3, 3, 3, &mut intermediate);
         approx_equal(&intermediate, &input, 0.0001);

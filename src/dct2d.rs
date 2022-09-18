@@ -1,12 +1,12 @@
 use rustdct::DctNum;
-use rustdct::DctPlanner;
 
 // https://github.com/mpizenberg/fft2d exists, but it doesn't handle f32s, which seems to be more
 // than sufficient and would allow more simd instructions.
 
 /*
-This file implements the following python code:
+In the python reference implementation we have:
 
+```python
 # width x height x Y component matrix.
 y_indata = yiq_indata[:, :, 0] # cannot be made pep8 compatible.
 
@@ -21,11 +21,11 @@ in_dct = dct(dct(y_indata).transpose(1, 0)).transpose(0,
 
 # Step 3, convert these DCT components back to a vector once again.
 in_dctv = in_dct.reshape(1, -1)[0]
-
+```
 
 And the inverse
 
-
+```python
 idct = lambda x: scipy.fftpack.idct(x, norm='ortho')
 # Step 6, create the DCT matrix again.
 out_dct = self.y_dct_n.reshape(self.inshape[0], self.inshape[1])
@@ -36,6 +36,10 @@ y_outdata = idct(idct(out_dct).transpose(1, 0)).transpose(0,
 
 # Step 8, recompose the Y component with its IQ components.
 yiq_outdata = self.yiq
+```
+
+The scaling orthogonal normalisation doesn't matter much since we'll be scaling by ratio.
+
 */
 
 #[derive(PartialEq, Debug, Copy, Clone)]
@@ -111,7 +115,7 @@ pub fn dct2_2d<T: DctNum + std::ops::Mul>(
             Direction::Row => {
                 for row in 0..height {
                     // Copy the row into tmp.
-                    let mut row_iter = data.iter().skip(row * width).step_by(1).take(width);
+                    let row_iter = data.iter().skip(row * width).step_by(1).take(width);
                     let _ = row_iter
                         .zip(tmp.iter_mut())
                         .map(|(orig, out)| *out = *orig)
@@ -127,7 +131,7 @@ pub fn dct2_2d<T: DctNum + std::ops::Mul>(
 
                     // Copy tmp back into the data, overwriting the original input.
                     // Do note we apply scaling by a factor of two here.
-                    let mut row_iter_mut = data.iter_mut().skip(row * width).step_by(1).take(width);
+                    let row_iter_mut = data.iter_mut().skip(row * width).step_by(1).take(width);
                     let _ = row_iter_mut
                         .zip(tmp.iter())
                         .map(|(data_dct, result)| *data_dct = scaling * *result)
@@ -137,7 +141,7 @@ pub fn dct2_2d<T: DctNum + std::ops::Mul>(
 
             Direction::Column => {
                 for column in 0..width {
-                    let mut col_iter = data.iter().skip(column).step_by(width).take(height);
+                    let col_iter = data.iter().skip(column).step_by(width).take(height);
                     let _ = col_iter
                         .zip(tmp.iter_mut())
                         .map(|(orig, out)| *out = *orig)
@@ -163,7 +167,7 @@ pub fn dct2_2d<T: DctNum + std::ops::Mul>(
         Type::DCT3 => {
             // Multiply by the correction factor.
             let scaling = T::from_usize(4).unwrap() / T::from_usize(width * height).unwrap();
-            data.iter_mut().map(|z| *z = *z * scaling).collect::<()>();
+            let _ = data.iter_mut().map(|z| *z = *z * scaling).collect::<()>();
         }
     };
 }
@@ -171,6 +175,7 @@ pub fn dct2_2d<T: DctNum + std::ops::Mul>(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rustdct::DctPlanner;
 
     fn approx_equal<T: DctNum + std::cmp::PartialOrd + std::fmt::Display>(
         a: &[T],
@@ -273,9 +278,9 @@ mod tests {
 
         /*
         In python;
+        v = np.array([[1, 0, 0], [2, 0, 0], [0,0,3]])
         dct = lambda x: scipy.fftpack.dct(x)
-        in_dct = dct(dct(ident).transpose(1, 0)).transpose(0,
-                                                    1).transpose(1, 0)
+        in_dct = dct(dct(v).transpose(1, 0)).transpose(0, 1).transpose(1, 0)
         */
         #[rustfmt::skip]
         let res = [24f32, 0.0, 12.0,

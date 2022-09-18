@@ -84,8 +84,9 @@ pub fn dct2_2d<T: DctNum + std::ops::Mul>(
         Type::DCT3 => T::half(),
     };
 
-    for current in [first, second] {
-        let length = if first == Direction::Row {
+    // for current in [first, second] {
+    for current in [Direction::Row, Direction::Column] {
+        let length = if current == Direction::Row {
             width
         } else {
             height
@@ -108,11 +109,12 @@ pub fn dct2_2d<T: DctNum + std::ops::Mul>(
                         .collect::<()>();
 
                     // Perform dct on the row.
-                    println!("Row: {row} -> tmp: {tmp:?}");
+                    // println!("Row: {row} -> tmp: {tmp:?}");
                     match transform_type {
                         Type::DCT2 => dct.process_dct2_with_scratch(&mut tmp, &mut scratch),
                         Type::DCT3 => dct.process_dct3_with_scratch(&mut tmp, &mut scratch),
                     }
+                    // println!("result     -> tmp: {tmp:?}");
 
                     // Copy tmp back into the data, overwriting the original input.
                     // Do note we apply scaling by a factor of two here.
@@ -131,7 +133,7 @@ pub fn dct2_2d<T: DctNum + std::ops::Mul>(
                         .zip(tmp.iter_mut())
                         .map(|(orig, out)| *out = *orig)
                         .collect::<()>();
-                    println!("column: {column} -> tmp: {tmp:?}");
+                    // println!("column: {column} -> tmp: {tmp:?}");
                     match transform_type {
                         Type::DCT2 => dct.process_dct2_with_scratch(&mut tmp, &mut scratch),
                         Type::DCT3 => dct.process_dct3_with_scratch(&mut tmp, &mut scratch),
@@ -145,7 +147,7 @@ pub fn dct2_2d<T: DctNum + std::ops::Mul>(
                 }
             }
         }
-        println!("After {current:?}: -> data: {data:?}");
+        // println!("After {current:?}: -> data: {data:?}");
     }
     match transform_type {
         Type::DCT2 => {}
@@ -221,7 +223,7 @@ mod tests {
     }
 
     #[test]
-    fn test_2d_dct_against_scipy() {
+    fn test_2d_dct_against_scipy_almost_identity() {
         #[rustfmt::skip]
         let input = [1.0f32, 0.0, 0.0,
                      1.0f32, 0.0, 0.0,
@@ -248,6 +250,36 @@ mod tests {
         dct2_2d(&mut planner, Type::DCT3, 3, 3, &mut intermediate);
         approx_equal(&intermediate, &input, 0.0001);
     }
+
+    #[test]
+    fn test_2d_dct_against_scipy_no_ones() {
+        #[rustfmt::skip]
+        let input = [1.0f32, 0.0, 0.0,
+                     2.0f32, 0.0, 0.0,
+                     0.0f32, 0.0, 3.0];
+        let mut intermediate = input.clone();
+        let mut planner = DctPlanner::new();
+        dct2_2d(&mut planner, Type::DCT2, 3, 3, &mut intermediate);
+        println!("{input:?}");
+
+        /*
+        In python;
+        dct = lambda x: scipy.fftpack.dct(x)
+        in_dct = dct(dct(ident).transpose(1, 0)).transpose(0,
+                                                    1).transpose(1, 0)
+        */
+        #[rustfmt::skip]
+        let res = [24f32, 0.0, 12.0,
+                     -6.92820323, 12.0, -3.46410162,
+                    0.0, -10.3923048, 0.0];
+        // This now checks the resulting dct.
+        approx_equal(&intermediate, &res, 0.0001);
+
+        // Check whether the inverse works.
+        dct2_2d(&mut planner, Type::DCT3, 3, 3, &mut intermediate);
+        approx_equal(&intermediate, &input, 0.0001);
+    }
+
     #[test]
     fn test_2d_dct_against_scipy_larger() {
         /*
@@ -289,7 +321,7 @@ mod tests {
         ];
         let mut intermediate = input.clone();
         let mut planner = DctPlanner::new();
-        dct2_2d(&mut planner, Type::DCT2, 3, 3, &mut intermediate);
+        dct2_2d(&mut planner, Type::DCT2, width, height, &mut intermediate);
 
         let dct = [
             46.524385961807795,
@@ -315,7 +347,7 @@ mod tests {
         ];
         approx_equal(&intermediate, &dct, 0.0001);
 
-        dct2_2d(&mut planner, Type::DCT3, 3, 3, &mut intermediate);
+        dct2_2d(&mut planner, Type::DCT3, width, height, &mut intermediate);
         approx_equal(&intermediate, &input, 0.0001);
     }
 }

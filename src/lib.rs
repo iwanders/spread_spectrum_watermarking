@@ -1,6 +1,6 @@
 // pub mod util;
 pub mod dct2d;
-pub mod spread_spectrum_watermark;
+pub mod algorithm;
 pub mod util;
 pub mod yiq;
 
@@ -10,9 +10,9 @@ pub fn do_thing(image_path: &PathBuf) {
     let orig_image =
         image::open(&image_path).expect(&format!("could not load image at {:?}", image_path));
 
-    let mut watermarker = spread_spectrum_watermark::Watermarker::new(orig_image);
+    let mut watermarker = algorithm::Watermarker::new(orig_image);
 
-    let mark = spread_spectrum_watermark::Mark::from(&[
+    let mark = algorithm::Mark::from(&[
         1.5662269184308768,
         -0.139376843912537,
         1.2815220015684436,
@@ -114,7 +114,7 @@ pub fn do_thing(image_path: &PathBuf) {
         0.5224353745484088,
         2.7456791406097314,
     ]);
-    let config = spread_spectrum_watermark::Config::default();
+    let config = algorithm::EmbedConfig::default();
     watermarker.mark(config, &[mark]);
     let res = watermarker.result();
 

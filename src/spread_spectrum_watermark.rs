@@ -1,3 +1,5 @@
+//! Contains the actualy logic that ties everything together.
+//!
 //! This algorithm is described in the following paper:
 //! J. Cox, J. Kilian, F. T. Leighton and T. Shamoon,
 //! "Secure spread spectrum watermarking for multimedia,"
@@ -15,17 +17,116 @@
 //! - Convert image back from YIQ to RGB color space.
 //!
 
-// Not too sure what code structure will be convenient here.
+// Python implementation problems;
+// [x] The energy isn't taken, instead the coefficients are just sorted (not even by magnitude)
+// [x] Adding multiple watermarks needs to be consecutive, which means the first watermark may be
+//     amplified.
+//
+// [x] Denotes fixed in this implementation.
 
-// Python reference implementation problems;
-// - The energy isn't taken, instead the coefficients are just sorted (not even by magnitude)
-// - Adding multiple watermarks needs to be consecutive, which means the first watermark may be
-//   amplified.
+use rustdct::DctPlanner;
+pub type InsertFunction = Box<
+    dyn Fn(
+        /* coefficient_index */ usize,
+        /* original_value */ f32,
+        /* watermark value */ f32,
+    ) -> f32,
+>;
+
+pub enum Insertion {
+    Option2(f32),
+    Custom(InsertFunction),
+}
+
+pub struct Config {
+    insertion: Insertion,
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Config {
+            insertion: Insertion::Option2(0.1),
+        }
+    }
+}
+
+/// Watermarker to encapsulate the steps necessary.
+pub struct Watermarker {
+    image: crate::yiq::YIQ32FImage,
+    planner: DctPlanner<f32>,
+}
+
+impl Watermarker {
+    /// Create a watermarker, taking a [`image::DynamicImage`] and performing the dct.
+    pub fn new(image: image::DynamicImage) -> Self {
+        let mut v = Watermarker {
+            image: (&image.into_rgb32f()).into(), // convert to YIQ color space
+            planner: DctPlanner::<f32>::new(),
+        };
+        v.perform_dct(); // perform DCT on Y channel.
+        v
+    }
+
+    /// Perform the DCT on the Y channel.
+    fn perform_dct(&mut self) {
+        let width = self.image.width() as usize;
+        let height = self.image.height() as usize;
+        let y_channel = &mut self.image.y_mut().as_flat_samples_mut().samples;
+
+        crate::dct2d::dct2_2d(
+            &mut self.planner,
+            crate::dct2d::Type::DCT2,
+            width,
+            height,
+            y_channel,
+        );
+    }
+
+    /// Mark the image with the provided watermarks, given the configuration.
+    pub fn mark(&mut self, config: Config, marks: &[Mark]) {
+        let insert_fun = match config.insertion {
+            Insertion::Option2(scaling) => Embedder::make_insert_function_2(scaling),
+            Insertion::Custom(v) => v,
+        };
+        let y_channel = &mut self.image.y_mut().as_flat_samples_mut().samples;
+
+        // Embed the watermarks.
+        let mut embedder = Embedder::new(y_channel);
+        embedder.set_insert_function(insert_fun);
+        for mark in marks.iter() {
+            embedder.add(mark.clone());
+        }
+        embedder.finalize();
+    }
+
+    /// Consume the watermarker, performing the in-place dct and returning a [`image::DynamicImage`].
+    pub fn result(mut self) -> image::DynamicImage {
+        let width = self.image.width() as usize;
+        let height = self.image.height() as usize;
+
+        let y_channel = &mut self.image.y_mut().as_flat_samples_mut().samples;
+
+        // Convert back from cosine transform domain to real.
+        crate::dct2d::dct2_2d(
+            &mut self.planner,
+            crate::dct2d::Type::DCT3,
+            width,
+            height,
+            y_channel,
+        );
+
+        // Read the y_channel back into an image.
+        let img_back_to_rgb_f32: image::Rgb32FImage = (&self.image).into();
+        image::DynamicImage::ImageRgb32F(img_back_to_rgb_f32)
+    }
+}
 
 /// Mark to be embedded, ultimately converted into sequence of floats
-/// The paper recommends using a 0 mean sigma^1 = 1 standard distribution to determine the sequence
+///
+/// The paper recommends using a 0 mean sigma^2 = 1 standard distribution to determine the sequence
 /// to be embedded.
 /// See paper section IV-D as to why using a binary signal is vulnerable to multi document attacks.
+#[derive(Clone, Debug)]
 pub struct Mark {
     data: Vec<f32>,
 }
@@ -46,14 +147,8 @@ impl Mark {
     }
 }
 
-pub type InsertFunction = Box<
-    dyn Fn(
-        /* coefficient_index */ usize,
-        /* original_value */ f32,
-        /* watermark value */ f32,
-    ) -> f32,
->;
-
+/// Helper to actually embed watermarks into coefficients.
+///
 pub struct Embedder<'a> {
     coefficients: &'a mut [f32],
     indices: Vec<usize>,
@@ -113,13 +208,15 @@ impl<'a> Embedder<'a> {
         if self.watermarks.len() == 1 {
             // Easy case, we can deal without copying the original coefficients.
             for (index, watermark) in self.indices.iter().zip(self.watermarks[0].data()) {
-                self.coefficients[*index] = (self.insert_function)(*index, self.coefficients[*index], *watermark);
+                self.coefficients[*index] =
+                    (self.insert_function)(*index, self.coefficients[*index], *watermark);
             }
         } else {
             let original_coefficients = self.coefficients.to_vec();
             for wm in self.watermarks.iter() {
                 for (index, watermark) in self.indices.iter().zip(wm.data()) {
-                    let updated = (self.insert_function)(*index, original_coefficients[*index], *watermark);
+                    let updated =
+                        (self.insert_function)(*index, original_coefficients[*index], *watermark);
                     let change = updated - original_coefficients[*index];
                     self.coefficients[*index] = self.coefficients[*index] + change;
                 }
@@ -149,7 +246,17 @@ mod tests {
         embedder.add(mark);
         embedder.finalize();
         let scaling = 0.1;
-        assert_eq!(&coefficients, &[-3f32, 5.0 * (1.0 + 1.0 * scaling), -8.0 *(1.0 +  1.0 * scaling), 7.0 * (1.0 - 0.5 * scaling), 1.0, 2.0]);
+        assert_eq!(
+            &coefficients,
+            &[
+                -3f32,
+                5.0 * (1.0 + 1.0 * scaling),
+                -8.0 * (1.0 + 1.0 * scaling),
+                7.0 * (1.0 - 0.5 * scaling),
+                1.0,
+                2.0
+            ]
+        );
     }
 
     #[test]
@@ -163,7 +270,17 @@ mod tests {
         embedder.add(mark2);
         embedder.finalize();
         let scaling = 0.1;
-        assert_eq!(&coefficients, &[-3f32, 5.0 * (1.0 + 1.0 * scaling), -8.0 *(1.0 +  1.0 * scaling), 7.0 * (1.0 - 0.5 * scaling), 1.0, 2.0]);
+        assert_eq!(
+            &coefficients,
+            &[
+                -3f32,
+                5.0 * (1.0 + 1.0 * scaling),
+                -8.0 * (1.0 + 1.0 * scaling),
+                7.0 * (1.0 - 0.5 * scaling),
+                1.0,
+                2.0
+            ]
+        );
     }
 
     #[test]
@@ -177,16 +294,16 @@ mod tests {
         embedder.add(mark2);
         embedder.finalize();
         let scaling = 0.1;
-        let d_v2_from_mark1 = -8.0 *(1.0 +  1.0 * scaling) - -8.0;
-        let d_v2_from_mark2 = -8.0 *(1.0 +  0.5 * scaling) - -8.0;
+        let d_v2_from_mark1 = -8.0 * (1.0 + 1.0 * scaling) - -8.0;
+        let d_v2_from_mark2 = -8.0 * (1.0 + 0.5 * scaling) - -8.0;
         let v2 = -8.0 + d_v2_from_mark1 + d_v2_from_mark2;
 
-        let d_v3_from_mark1 = 7.0 *(1.0 +  -0.5 * scaling) - 7.0;
-        let d_v3_from_mark2 = 7.0 *(1.0 +  -0.5 * scaling) - 7.0;
+        let d_v3_from_mark1 = 7.0 * (1.0 + -0.5 * scaling) - 7.0;
+        let d_v3_from_mark2 = 7.0 * (1.0 + -0.5 * scaling) - 7.0;
         let v3 = 7.0 + d_v3_from_mark1 + d_v3_from_mark2;
 
-        let d_v1_from_mark1 = 5.0 *(1.0 +  1.0 * scaling) - 5.0;
-        let d_v1_from_mark2 = 5.0 *(1.0 +  -1.0 * scaling) - 5.0;
+        let d_v1_from_mark1 = 5.0 * (1.0 + 1.0 * scaling) - 5.0;
+        let d_v1_from_mark2 = 5.0 * (1.0 + -1.0 * scaling) - 5.0;
         let v1 = 5.0 + d_v1_from_mark1 + d_v1_from_mark2;
         let expected = [-3f32, v1, v2, v3, 1.0, 2.0];
         // println!("expected: {expected:?}");

@@ -67,6 +67,30 @@ impl Default for WriteConfig {
     }
 }
 
+/// Insertion method for the watermark.
+pub enum Extraction {
+    /// Inverse of option 2 from the paper; x_i' = x_i (1 + alpha * w_i),  alpha as specified.
+    Option2(f32),
+    // / Custom extraction function to be used.
+    // Custom(ExtractFunction),
+}
+
+
+/// Configuration to extract watermark with.
+pub struct ReadConfig {
+    extraction: Extraction,
+}
+
+impl Default for ReadConfig {
+    /// Default implementation for the watermark extraction, using Option 2 with alpha of 0.1.
+    fn default() -> Self {
+        ReadConfig {
+            extraction: Extraction::Option2(0.1),
+        }
+    }
+}
+
+
 // The Reader and Writer have some code duplication, this can be factored out, but it doesn't make
 // the code or algorithm more readable, so for now I chose not to do so.
 
@@ -143,37 +167,49 @@ impl Writer {
     }
 }
 
-// note; No idea if this is how the const generics were intended, but it works and gives neat
-//       compile time guarantees.
-
-/// Read the signal out of an image using the original.
-pub struct Reader<const IS_BASE: bool> {
+/// Reader to be used for the base image.
+pub struct Reader {
     image: crate::yiq::YIQ32FImage,
     planner: DctPlanner<f32>,
     indices: Option<Vec<usize>>,
 }
 
-/// Type alias to denote a reader to hold the base document.
-///
-/// The indices and values from this document are used to extract the watermark.
-pub type ReaderBase = Reader<true>;
-
-/// Type alias to denote a reader to hold the derived document.
-///
-/// The derived document should be paired with its associated base document to allow the correct
-/// extraction of a watermark.
-pub type ReaderDerived = Reader<false>;
-
-impl<const IS_BASE: bool> Reader<{IS_BASE}> {
-    /// Create a reader, taking a [`image::DynamicImage`] and performing the dct.
+/// Reader to be used for the derived image.
+pub struct ReaderDerived(Reader);
+impl ReaderDerived {
+    /// Create a derived reader, initialising this image as the derived image, which is read from.
+    ///
+    /// This means it can only be read from, it can not be used as a base to extract watermarks.
     pub fn new(image: image::DynamicImage) -> Self {
+        Reader::derived(image)
+    }
+}
+
+
+impl Reader {
+    /// Create a base reader, initialising this image as the base image, used for reading.
+    ///
+    /// Its coefficients and values will be used to extract watermarks from other readers.
+    pub fn base(image: image::DynamicImage, config: ReadConfig) -> Self {
+        Reader::new_impl(image, true, Some(config))
+    }
+
+    /// Create a derived reader, initialising this image as the derived image, which is read from.
+    ///
+    /// This means it can only be read from, it can not be used as a base to extract watermarks.
+    pub fn derived(image: image::DynamicImage) -> ReaderDerived {
+        ReaderDerived(Reader::new_impl(image, false, None))
+    }
+
+    /// Create a new reader.
+    fn new_impl(image: image::DynamicImage, is_base: bool, config: Option<ReadConfig>) -> Self {
         let mut v = Reader {
             image: (&image.into_rgb32f()).into(), // convert to YIQ color space
             planner: DctPlanner::<f32>::new(),
             indices: None,
         };
         v.perform_dct(); // perform DCT on Y channel.
-        if IS_BASE {
+        if is_base {
             let coefficients = &v.image.y().as_flat_samples().samples;
             v.indices = Some(obtain_indices_from_coefficient_magnitude(&coefficients));
         }
@@ -194,20 +230,12 @@ impl<const IS_BASE: bool> Reader<{IS_BASE}> {
             y_channel,
         );
     }
-}
 
-pub struct If<const B: bool>;
-pub trait True { }
-impl True for If<true> { }
-
-
-//https://internals.rust-lang.org/t/const-generics-where-restrictions/12742/6
-impl<const IS_BASE: bool> Reader<{IS_BASE}> where If<{IS_BASE}>: True {
-    pub fn read(&self, derived: &ReaderDerived) {
+    pub fn extract(&self, derived: &ReaderDerived, extracted: &mut [f32]) {
         unimplemented!();
     }
-}
 
+}
 /// Mark to be embedded, ultimately converted into sequence of floats
 ///
 /// The paper recommends using a 0 mean sigma^2 = 1 standard distribution to determine the sequence

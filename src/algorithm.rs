@@ -143,22 +143,40 @@ impl Writer {
     }
 }
 
+// note; No idea if this is how the const generics were intended, but it works and gives neat
+//       compile time guarantees.
+
 /// Read the signal out of an image using the original.
-pub struct Reader {
+pub struct Reader<const IS_BASE: bool> {
     image: crate::yiq::YIQ32FImage,
     planner: DctPlanner<f32>,
-    coefficients: Option<Vec<usize>>,
+    indices: Option<Vec<usize>>,
 }
 
-impl Reader {
+/// Type alias to denote a reader to hold the base document.
+///
+/// The indices and values from this document are used to extract the watermark.
+pub type ReaderBase = Reader<true>;
+
+/// Type alias to denote a reader to hold the derived document.
+///
+/// The derived document should be paired with its associated base document to allow the correct
+/// extraction of a watermark.
+pub type ReaderDerived = Reader<false>;
+
+impl<const IS_BASE: bool> Reader<{IS_BASE}> {
     /// Create a reader, taking a [`image::DynamicImage`] and performing the dct.
     pub fn new(image: image::DynamicImage) -> Self {
         let mut v = Reader {
             image: (&image.into_rgb32f()).into(), // convert to YIQ color space
             planner: DctPlanner::<f32>::new(),
-            coefficients: None,
+            indices: None,
         };
         v.perform_dct(); // perform DCT on Y channel.
+        if IS_BASE {
+            let coefficients = &v.image.y().as_flat_samples().samples;
+            v.indices = Some(obtain_indices_from_coefficient_magnitude(&coefficients));
+        }
         v
     }
 
@@ -175,6 +193,18 @@ impl Reader {
             height,
             y_channel,
         );
+    }
+}
+
+pub struct If<const B: bool>;
+pub trait True { }
+impl True for If<true> { }
+
+
+//https://internals.rust-lang.org/t/const-generics-where-restrictions/12742/6
+impl<const IS_BASE: bool> Reader<{IS_BASE}> where If<{IS_BASE}>: True {
+    pub fn read(&self, derived: &ReaderDerived) {
+        unimplemented!();
     }
 }
 

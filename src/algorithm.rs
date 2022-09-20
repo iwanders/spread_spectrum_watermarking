@@ -316,15 +316,17 @@ mod tests {
 
     #[test]
     fn test_embedder_indices() {
+        let insert_function = Embedder::make_insert_function_2(0.1);
         let mut coefficients = [-3f32, 5.0, -8.0, 7.0, 1.0, 2.0];
-        let mut embedder = Embedder::new(&mut coefficients);
+        let mut embedder = Embedder::new(&mut coefficients, &insert_function);
         assert_eq!(embedder.indices(), &[2, 3, 1, 5, 4]);
     }
 
     #[test]
     fn test_embedder_single() {
+        let insert_function = Embedder::make_insert_function_2(0.1);
         let mut coefficients = [-3f32, 5.0, -8.0, 7.0, 1.0, 2.0];
-        let mut embedder = Embedder::new(&mut coefficients);
+        let mut embedder = Embedder::new(&mut coefficients, &insert_function);
         let mark = Mark::from(&[1.0, -0.5, 1.0]);
 
         embedder.add(mark);
@@ -345,8 +347,9 @@ mod tests {
 
     #[test]
     fn test_embedder_single_and_zero() {
+        let insert_function = Embedder::make_insert_function_2(0.1);
         let mut coefficients = [-3f32, 5.0, -8.0, 7.0, 1.0, 2.0];
-        let mut embedder = Embedder::new(&mut coefficients);
+        let mut embedder = Embedder::new(&mut coefficients, &insert_function);
         let mark1 = Mark::from(&[1.0, -0.5, 1.0]);
         let mark2 = Mark::from(&[0.0, 0.0, 0.0]);
 
@@ -369,8 +372,9 @@ mod tests {
 
     #[test]
     fn test_embedder_multiple() {
+        let insert_function = Embedder::make_insert_function_2(0.1);
         let mut coefficients = [-3f32, 5.0, -8.0, 7.0, 1.0, 2.0];
-        let mut embedder = Embedder::new(&mut coefficients);
+        let mut embedder = Embedder::new(&mut coefficients, &insert_function);
         let mark1 = Mark::from(&[1.0, -0.5, 1.0]);
         let mark2 = Mark::from(&[0.5, -0.5, -1.0]);
 

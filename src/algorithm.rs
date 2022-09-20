@@ -24,6 +24,10 @@
 //
 // [x] Denotes fixed in this implementation.
 
+// More food for thought:
+// [ ] Is the current approach of taking the highest absolute coefficient the correct approach?
+//
+
 use rustdct::DctPlanner;
 /// Function used to embed the watermark into coefficients.
 ///
@@ -50,31 +54,40 @@ pub enum Insertion {
 }
 
 /// Configuration to embed watermark with.
-pub struct EmbedConfig {
+pub struct WriteConfig {
     insertion: Insertion,
 }
 
-impl Default for EmbedConfig {
+impl Default for WriteConfig {
     /// Default implementation for the watermark embedding, using Option 2 with alpha of 0.1.
     fn default() -> Self {
-        EmbedConfig {
+        WriteConfig {
             insertion: Insertion::Option2(0.1),
         }
     }
 }
 
-/// Watermarker to encapsulate the steps necessary.
-pub struct Watermarker {
+// The Reader and Writer have some code duplication, this can be factored out, but it doesn't make
+// the code or algorithm more readable, so for now I chose not to do so.
+
+/// Writer to embed watermarks into an image.
+pub struct Writer {
     image: crate::yiq::YIQ32FImage,
     planner: DctPlanner<f32>,
+    insertion_function: InsertFunction,
 }
 
-impl Watermarker {
-    /// Create a watermarker, taking a [`image::DynamicImage`] and performing the dct.
-    pub fn new(image: image::DynamicImage) -> Self {
-        let mut v = Watermarker {
+impl Writer {
+    /// Create a writer, taking a [`image::DynamicImage`] and performing the dct.
+    pub fn new(image: image::DynamicImage, config: WriteConfig) -> Self {
+        let insertion_function = match config.insertion {
+            Insertion::Option2(scaling) => Embedder::make_insert_function_2(scaling),
+            Insertion::Custom(v) => v,
+        };
+        let mut v = Writer {
             image: (&image.into_rgb32f()).into(), // convert to YIQ color space
             planner: DctPlanner::<f32>::new(),
+            insertion_function,
         };
         v.perform_dct(); // perform DCT on Y channel.
         v
@@ -96,16 +109,12 @@ impl Watermarker {
     }
 
     /// Mark the image with the provided watermarks, given the configuration.
-    pub fn mark(&mut self, config: EmbedConfig, marks: &[Mark]) {
-        let insert_fun = match config.insertion {
-            Insertion::Option2(scaling) => Embedder::make_insert_function_2(scaling),
-            Insertion::Custom(v) => v,
-        };
+    pub fn mark(&mut self, marks: &[Mark]) {
         let y_channel = &mut self.image.y_mut().as_flat_samples_mut().samples;
 
         // Embed the watermarks.
-        let mut embedder = Embedder::new(y_channel);
-        embedder.set_insert_function(insert_fun);
+        let mut embedder = Embedder::new(y_channel, &self.insertion_function);
+        // embedder.set_insert_function(insertion_function);
         for mark in marks.iter() {
             embedder.add(mark.clone());
         }
@@ -131,6 +140,41 @@ impl Watermarker {
         // Read the y_channel back into an image.
         let img_back_to_rgb_f32: image::Rgb32FImage = (&self.image).into();
         image::DynamicImage::ImageRgb32F(img_back_to_rgb_f32)
+    }
+}
+
+/// Read the signal out of an image using the original.
+pub struct Reader {
+    image: crate::yiq::YIQ32FImage,
+    planner: DctPlanner<f32>,
+    coefficients: Option<Vec<usize>>,
+}
+
+impl Reader {
+    /// Create a reader, taking a [`image::DynamicImage`] and performing the dct.
+    pub fn new(image: image::DynamicImage) -> Self {
+        let mut v = Reader {
+            image: (&image.into_rgb32f()).into(), // convert to YIQ color space
+            planner: DctPlanner::<f32>::new(),
+            coefficients: None,
+        };
+        v.perform_dct(); // perform DCT on Y channel.
+        v
+    }
+
+    /// Perform the DCT on the Y channel.
+    fn perform_dct(&mut self) {
+        let width = self.image.width() as usize;
+        let height = self.image.height() as usize;
+        let y_channel = &mut self.image.y_mut().as_flat_samples_mut().samples;
+
+        crate::dct2d::dct2_2d(
+            &mut self.planner,
+            crate::dct2d::Type::DCT2,
+            width,
+            height,
+            y_channel,
+        );
     }
 }
 
@@ -169,21 +213,34 @@ impl Mark {
     }
 }
 
+fn obtain_indices_from_coefficient_magnitude(coefficients: &[f32]) -> Vec<usize> {
+    let mut coeff_abs_index = coefficients
+        .iter()
+        .enumerate()
+        .skip(1)
+        .map(|(index, coeff)| (coeff.abs(), index))
+        .collect::<Vec<_>>();
+    coeff_abs_index.sort_by(|a, b| b.0.total_cmp(&a.0));
+    coeff_abs_index
+        .iter()
+        .map(|(_coeff, index)| *index)
+        .collect()
+}
+
 /// Helper to actually embed watermarks into coefficients.
 ///
 /// We have this helper struct to allow us to embed multiple watermarks into one sequence of
 /// coefficients. This way the indices used to modulate on don't change between consecutive calls
 /// and this avoids picking different indices because the previous watermark that was embedded
 /// changed the order of the coefficients.
-pub struct Embedder<'a> {
+struct Embedder<'a, 'b> {
     coefficients: &'a mut [f32],
     indices: Vec<usize>,
     watermarks: Vec<Mark>,
-    insert_function: InsertFunction,
+    insert_function: &'b InsertFunction,
 }
 
-impl<'a> Embedder<'a> {
-
+impl<'a, 'b> Embedder<'a, 'b> {
     /// Create the insertion function of type x_i' = x_i (1 + alpha * w_i), with scaling as
     /// provided.
     pub fn make_insert_function_2(scaling: f32) -> InsertFunction {
@@ -193,12 +250,12 @@ impl<'a> Embedder<'a> {
     }
 
     /// Create a new embedder, operating on the provided slice of coefficients.
-    pub fn new(coefficients: &'a mut [f32]) -> Self {
+    pub fn new(coefficients: &'a mut [f32], insert_function: &'b InsertFunction) -> Self {
         let mut v = Embedder {
             coefficients,
             indices: vec![],
             watermarks: vec![],
-            insert_function: Self::make_insert_function_2(0.1),
+            insert_function,
         };
         v.update_indices();
         v
@@ -206,31 +263,15 @@ impl<'a> Embedder<'a> {
 
     /// Function that determines which indices should be operated on.
     fn update_indices(&mut self) {
-        // Skip the DC offset, so the first index.
-        let mut coeff_abs_index = self
-            .coefficients
-            .iter()
-            .enumerate()
-            .skip(1)
-            .map(|(index, coeff)| (coeff.abs(), index))
-            .collect::<Vec<_>>();
-        coeff_abs_index.sort_by(|a, b| b.0.total_cmp(&a.0));
-        self.indices = coeff_abs_index
-            .iter()
-            .map(|(_coeff, index)| *index)
-            .collect();
-    }
-
-    /// Set the insertion function to be used to embed watermarks.
-    pub fn set_insert_function(&mut self, fun: InsertFunction) {
-        self.insert_function = fun;
+        self.indices = obtain_indices_from_coefficient_magnitude(&self.coefficients);
     }
 
     /// Retrieve the sorted (highest priority first) list of indices.
     ///
     /// The zero'th index is always skipped, because modifying this value would change the DC gain
     /// of the image and thus the brightness.
-    pub fn indices(&self) -> &[usize] {
+    #[allow(dead_code)]
+    fn indices(&self) -> &[usize] {
         &self.indices
     }
 
@@ -247,14 +288,14 @@ impl<'a> Embedder<'a> {
             // Easy case, we can deal without copying the original coefficients.
             for (index, watermark) in self.indices.iter().zip(self.watermarks[0].data()) {
                 self.coefficients[*index] =
-                    (self.insert_function)(*index, self.coefficients[*index], *watermark);
+                    (*self.insert_function)(*index, self.coefficients[*index], *watermark);
             }
         } else {
             let original_coefficients = self.coefficients.to_vec();
             for wm in self.watermarks.iter() {
                 for (index, watermark) in self.indices.iter().zip(wm.data()) {
                     let updated =
-                        (self.insert_function)(*index, original_coefficients[*index], *watermark);
+                        (*self.insert_function)(*index, original_coefficients[*index], *watermark);
                     let change = updated - original_coefficients[*index];
                     self.coefficients[*index] = self.coefficients[*index] + change;
                 }
@@ -263,10 +304,15 @@ impl<'a> Embedder<'a> {
     }
 }
 
+/// Inverse of the Embedder
+struct Extractor {}
+
+/// Test whether a watermark is present in the extracted signal.
+pub struct Tester {}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rustdct::DctPlanner;
 
     #[test]
     fn test_embedder_indices() {

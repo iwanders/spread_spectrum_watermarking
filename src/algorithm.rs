@@ -167,6 +167,85 @@ impl Writer {
     }
 }
 
+
+/// Helper to actually embed watermarks into coefficients.
+///
+/// We have this helper struct to allow us to embed multiple watermarks into one sequence of
+/// coefficients. This way the indices used to modulate on don't change between consecutive calls
+/// and this avoids picking different indices because the previous watermark that was embedded
+/// changed the order of the coefficients.
+struct Embedder<'a, 'b> {
+    coefficients: &'a mut [f32],
+    indices: Vec<usize>,
+    watermarks: Vec<Mark>,
+    insert_function: &'b InsertFunction,
+}
+
+impl<'a, 'b> Embedder<'a, 'b> {
+    /// Create the insertion function of type x_i' = x_i (1 + alpha * w_i), with scaling as
+    /// provided.
+    pub fn make_insert_function_2(scaling: f32) -> InsertFunction {
+        Box::new(move |_index, original_value, mark_value| {
+            original_value * (1.0 + scaling * mark_value)
+        })
+    }
+
+    /// Create a new embedder, operating on the provided slice of coefficients.
+    pub fn new(coefficients: &'a mut [f32], insert_function: &'b InsertFunction) -> Self {
+        let mut v = Embedder {
+            coefficients,
+            indices: vec![],
+            watermarks: vec![],
+            insert_function,
+        };
+        v.update_indices();
+        v
+    }
+
+    /// Function that determines which indices should be operated on.
+    fn update_indices(&mut self) {
+        self.indices = obtain_indices_from_coefficient_magnitude(&self.coefficients);
+    }
+
+    /// Retrieve the sorted (highest priority first) list of indices.
+    ///
+    /// The zero'th index is always skipped, because modifying this value would change the DC gain
+    /// of the image and thus the brightness.
+    #[allow(dead_code)]
+    fn indices(&self) -> &[usize] {
+        &self.indices
+    }
+
+    /// Add a watermark to the list of watermarks to be embedded.
+    pub fn add(&mut self, mark: Mark) {
+        self.watermarks.push(mark);
+    }
+
+    /// Modify the coefficients and embed all the added watermarks into them.
+    pub fn finalize(self) {
+        // Actually modulate the watermarks onto the coefficients.
+        // We want to always work against the original coefficients.
+        if self.watermarks.len() == 1 {
+            // Easy case, we can deal without copying the original coefficients.
+            for (index, watermark) in self.indices.iter().zip(self.watermarks[0].data()) {
+                self.coefficients[*index] =
+                    (*self.insert_function)(*index, self.coefficients[*index], *watermark);
+            }
+        } else {
+            let original_coefficients = self.coefficients.to_vec();
+            for wm in self.watermarks.iter() {
+                for (index, watermark) in self.indices.iter().zip(wm.data()) {
+                    let updated =
+                        (*self.insert_function)(*index, original_coefficients[*index], *watermark);
+                    let change = updated - original_coefficients[*index];
+                    self.coefficients[*index] = self.coefficients[*index] + change;
+                }
+            }
+        }
+    }
+}
+
+
 /// Reader to be used for the base image.
 pub struct Reader {
     image: crate::yiq::YIQ32FImage,
@@ -285,82 +364,6 @@ fn obtain_indices_from_coefficient_magnitude(coefficients: &[f32]) -> Vec<usize>
         .collect()
 }
 
-/// Helper to actually embed watermarks into coefficients.
-///
-/// We have this helper struct to allow us to embed multiple watermarks into one sequence of
-/// coefficients. This way the indices used to modulate on don't change between consecutive calls
-/// and this avoids picking different indices because the previous watermark that was embedded
-/// changed the order of the coefficients.
-struct Embedder<'a, 'b> {
-    coefficients: &'a mut [f32],
-    indices: Vec<usize>,
-    watermarks: Vec<Mark>,
-    insert_function: &'b InsertFunction,
-}
-
-impl<'a, 'b> Embedder<'a, 'b> {
-    /// Create the insertion function of type x_i' = x_i (1 + alpha * w_i), with scaling as
-    /// provided.
-    pub fn make_insert_function_2(scaling: f32) -> InsertFunction {
-        Box::new(move |_index, original_value, mark_value| {
-            original_value * (1.0 + scaling * mark_value)
-        })
-    }
-
-    /// Create a new embedder, operating on the provided slice of coefficients.
-    pub fn new(coefficients: &'a mut [f32], insert_function: &'b InsertFunction) -> Self {
-        let mut v = Embedder {
-            coefficients,
-            indices: vec![],
-            watermarks: vec![],
-            insert_function,
-        };
-        v.update_indices();
-        v
-    }
-
-    /// Function that determines which indices should be operated on.
-    fn update_indices(&mut self) {
-        self.indices = obtain_indices_from_coefficient_magnitude(&self.coefficients);
-    }
-
-    /// Retrieve the sorted (highest priority first) list of indices.
-    ///
-    /// The zero'th index is always skipped, because modifying this value would change the DC gain
-    /// of the image and thus the brightness.
-    #[allow(dead_code)]
-    fn indices(&self) -> &[usize] {
-        &self.indices
-    }
-
-    /// Add a watermark to the list of watermarks to be embedded.
-    pub fn add(&mut self, mark: Mark) {
-        self.watermarks.push(mark);
-    }
-
-    /// Modify the coefficients and embed all the added watermarks into them.
-    pub fn finalize(&mut self) {
-        // Actually modulate the watermarks onto the coefficients.
-        // We want to always work against the original coefficients.
-        if self.watermarks.len() == 1 {
-            // Easy case, we can deal without copying the original coefficients.
-            for (index, watermark) in self.indices.iter().zip(self.watermarks[0].data()) {
-                self.coefficients[*index] =
-                    (*self.insert_function)(*index, self.coefficients[*index], *watermark);
-            }
-        } else {
-            let original_coefficients = self.coefficients.to_vec();
-            for wm in self.watermarks.iter() {
-                for (index, watermark) in self.indices.iter().zip(wm.data()) {
-                    let updated =
-                        (*self.insert_function)(*index, original_coefficients[*index], *watermark);
-                    let change = updated - original_coefficients[*index];
-                    self.coefficients[*index] = self.coefficients[*index] + change;
-                }
-            }
-        }
-    }
-}
 
 /// Inverse of the Embedder
 struct Extractor {}

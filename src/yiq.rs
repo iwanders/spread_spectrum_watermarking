@@ -247,7 +247,7 @@ mod tests {
         *orig_image.get_pixel_mut(4, 4) = image::Rgb([0.5, 0.3, 0.8]);
         *orig_image.get_pixel_mut(3, 0) = image::Rgb([1.0, 0.0, 0.0]);
 
-        let mut yiq_image: YIQ32FImage = (&orig_image).into();
+        let yiq_image: YIQ32FImage = (&orig_image).into();
         let rgb_back: image::Rgb32FImage = (&yiq_image).into();
         approx_equal(&orig_image.as_raw(), &rgb_back.as_raw(), 0.001);
         assert_eq!(orig_image.width(), rgb_back.width());

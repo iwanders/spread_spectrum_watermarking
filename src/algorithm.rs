@@ -87,10 +87,9 @@ impl Default for WriteConfig {
 pub enum Extraction {
     /// Inverse of option 2 from the paper; x_i' = x_i (1 + alpha * w_i),  alpha as specified.
     Option2(f32),
-    // / Custom extraction function to be used.
-    // Custom(ExtractFunction),
+    /// Custom extraction function to be used.
+    Custom(ExtractFunction),
 }
-
 
 /// Configuration to extract watermark with.
 pub struct ReadConfig {
@@ -105,7 +104,6 @@ impl Default for ReadConfig {
         }
     }
 }
-
 
 // The Reader and Writer have some code duplication, this can be factored out, but it doesn't make
 // the code or algorithm more readable, so for now I chose not to do so.
@@ -141,7 +139,6 @@ impl Writer {
         let coefficients = &self.image.y().as_flat_samples().samples;
         self.indices = obtain_indices_from_coefficient_magnitude(coefficients);
     }
-
 
     /// Perform the DCT on the Y channel.
     fn perform_dct(&mut self) {
@@ -193,7 +190,6 @@ impl Writer {
     }
 }
 
-
 /// Helper to actually embed watermarks into coefficients.
 ///
 /// We have this helper struct to allow us to embed multiple watermarks into one sequence of
@@ -217,8 +213,12 @@ impl<'a, 'b> Embedder<'a, 'b> {
     }
 
     /// Create a new embedder, operating on the provided slice of coefficients.
-    pub fn new(coefficients: &'a mut [f32], indices: &'a [usize], insert_function: &'b InsertFunction) -> Self {
-        let mut v = Embedder {
+    pub fn new(
+        coefficients: &'a mut [f32],
+        indices: &'a [usize],
+        insert_function: &'b InsertFunction,
+    ) -> Self {
+        let v = Embedder {
             coefficients,
             indices,
             watermarks: vec![],
@@ -265,12 +265,16 @@ impl<'a, 'b> Embedder<'a, 'b> {
     }
 }
 
+struct ReaderBase {
+    indices: Vec<usize>,
+    extract_function: ExtractFunction,
+}
 
 /// Reader to be used for the base image.
 pub struct Reader {
     image: crate::yiq::YIQ32FImage,
     planner: DctPlanner<f32>,
-    indices: Option<Vec<usize>>,
+    base: Option<ReaderBase>,
 }
 
 /// Reader to be used for the derived image.
@@ -283,7 +287,6 @@ impl ReaderDerived {
         Reader::derived(image)
     }
 }
-
 
 impl Reader {
     /// Create a base reader, initialising this image as the base image, used for reading.
@@ -305,14 +308,27 @@ impl Reader {
         let mut v = Reader {
             image: (&image.into_rgb32f()).into(), // convert to YIQ color space
             planner: DctPlanner::<f32>::new(),
-            indices: None,
+            base: None,
         };
         v.perform_dct(); // perform DCT on Y channel.
         if is_base {
+            let config = config.unwrap();
+            let extract_function = match config.extraction {
+                Extraction::Option2(scaling) => Extractor::make_extract_function_2(scaling),
+                Extraction::Custom(v) => v,
+            };
             let coefficients = &v.image.y().as_flat_samples().samples;
-            v.indices = Some(obtain_indices_from_coefficient_magnitude(&coefficients));
+            let indices = obtain_indices_from_coefficient_magnitude(&coefficients);
+            v.base = Some(ReaderBase {
+                indices,
+                extract_function,
+            })
         }
         v
+    }
+
+    fn coefficients(&self) -> &[f32] {
+        &self.image.y().as_flat_samples().samples
     }
 
     /// Perform the DCT on the Y channel.
@@ -331,44 +347,63 @@ impl Reader {
     }
 
     pub fn extract(&self, derived: &ReaderDerived, extracted: &mut [f32]) {
-        unimplemented!();
+        let base = self.base.as_ref().unwrap();
+        let extractor = Extractor::new(&self.coefficients(), &base.indices, &base.extract_function);
+        extractor.extract(derived.0.coefficients(), extracted);
     }
 }
 
-
 /// Inverse of the Embedder
 struct Extractor<'a, 'b> {
-    coefficients: &'a mut [f32],
+    base_coefficients: &'a [f32],
     indices: &'a [usize],
     extract_function: &'b ExtractFunction,
 }
 
-
-// def extract_function(V, Vstar, alpha=0.1):
-    // # inverse of the embed function...
-    // return (Vstar - V) / (V * alpha)
-
 impl<'a, 'b> Extractor<'a, 'b> {
     /// Create the extraction function for x_i' = x_i (1 + alpha * w_i), with scaling as
-    /// provided. So that becomes w_i = (x_i' - x_i) / (x_i * alpha)
+    /// provided. So that becomes w_i = (x_i' - x_i) / (x_i * alpha).
     pub fn make_extract_function_2(scaling: f32) -> ExtractFunction {
-        Box::new(move |_index, original_value, mark_value| {
-            original_value * (1.0 + scaling * mark_value)
-        })
+        Box::new(
+            move |_index, original_value_in_base_image, value_in_derived_image| {
+                (value_in_derived_image - original_value_in_base_image)
+                    / (original_value_in_base_image * scaling)
+            },
+        )
     }
 
-    /// Create a new embedder, operating on the provided slice of coefficients.
-    pub fn new(coefficients: &'a mut [f32], indices: &'a [usize], extract_function: &'b ExtractFunction) -> Self {
-        let mut v = Extractor {
-            coefficients,
+    /// Create a new extractor, operating on the provided slice of coefficients.
+    pub fn new(
+        base_coefficients: &'a [f32],
+        indices: &'a [usize],
+        extract_function: &'b ExtractFunction,
+    ) -> Self {
+        let v = Extractor {
+            base_coefficients,
             indices,
             extract_function,
         };
         v
     }
+
+    /// Extract a watermark into the slice. Panics if the size of extracted exceeds coefficients or
+    /// if the derived_coefficients length doesn't match the base_coefficients.
+    pub fn extract(&self, derived_coefficients: &[f32], extracted: &mut [f32]) {
+        if derived_coefficients.len() != self.base_coefficients.len() {
+            panic!("Derived coefficient length not equal to base coefficient length.");
+        }
+        if extracted.len() >= self.base_coefficients.len() {
+            panic!("Desired extraction length exceeds available coefficients.");
+        }
+        for i in 0..extracted.len() {
+            let coefficient_index = self.indices[i];
+            let original_value = self.base_coefficients[coefficient_index];
+            let derived_value = derived_coefficients[coefficient_index];
+            extracted[i] =
+                (*self.extract_function)(coefficient_index, original_value, derived_value);
+        }
+    }
 }
-
-
 
 /// Mark to be embedded, ultimately converted into sequence of floats
 ///
@@ -419,7 +454,6 @@ fn obtain_indices_from_coefficient_magnitude(coefficients: &[f32]) -> Vec<usize>
         .collect()
 }
 
-
 /// Test whether a watermark is present in the extracted signal.
 pub struct Tester {}
 
@@ -432,17 +466,20 @@ mod tests {
         let insert_function = Embedder::make_insert_function_2(0.1);
         let mut coefficients = [-3f32, 5.0, -8.0, 7.0, 1.0, 2.0];
         let indices = obtain_indices_from_coefficient_magnitude(&coefficients);
-        let mut embedder = Embedder::new(&mut coefficients, &indices, &insert_function);
+        let embedder = Embedder::new(&mut coefficients, &indices, &insert_function);
         assert_eq!(embedder.indices(), &[2, 3, 1, 5, 4]);
     }
 
     #[test]
     fn test_embedder_single() {
         let insert_function = Embedder::make_insert_function_2(0.1);
-        let mut coefficients = [-3f32, 5.0, -8.0, 7.0, 1.0, 2.0];
+        let extract_function = Extractor::make_extract_function_2(0.1);
+        let base_coefficients = [-3f32, 5.0, -8.0, 7.0, 1.0, 2.0];
+        let mut coefficients = base_coefficients.clone();
         let indices = obtain_indices_from_coefficient_magnitude(&coefficients);
         let mut embedder = Embedder::new(&mut coefficients, &indices, &insert_function);
-        let mark = Mark::from(&[1.0, -0.5, 1.0]);
+        let mark1_data = [1.0, -0.5, 1.0];
+        let mark = Mark::from(&mark1_data);
 
         embedder.add(mark);
         embedder.finalize();
@@ -458,6 +495,12 @@ mod tests {
                 2.0
             ]
         );
+        let extractor = Extractor::new(&base_coefficients, &indices, &extract_function);
+        let mut extracted = [0f32; 3];
+        extractor.extract(&coefficients, &mut extracted);
+        for i in 0..mark1_data.len() {
+            assert!((extracted[i] - mark1_data[i]).abs() < 0.000001);
+        }
     }
 
     #[test]

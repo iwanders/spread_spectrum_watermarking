@@ -40,8 +40,24 @@ use rustdct::DctPlanner;
 pub type InsertFunction = Box<
     dyn Fn(
         /* coefficient_index */ usize,
-        /* original_value */ f32,
+        /* original_value_in_image */ f32,
         /* watermark_value */ f32,
+    ) -> f32,
+>;
+
+/// Function used to extract the watermark out of coefficients.
+///
+/// Arguments:
+/// * `coefficient_index`: The index of the coefficient being modified.
+/// * `original_value_in_base_image`: Value of the original coefficient in the base image.
+/// * `value_in_derived_image`: Value of of the coefficient in the derived (watermarked) image.
+///
+/// Return: Extracted watermark value.
+pub type ExtractFunction = Box<
+    dyn Fn(
+        /* coefficient_index */ usize,
+        /* original_value_in_base_image */ f32,
+        /* value_in_derived_image */ f32,
     ) -> f32,
 >;
 
@@ -99,6 +115,7 @@ pub struct Writer {
     image: crate::yiq::YIQ32FImage,
     planner: DctPlanner<f32>,
     insertion_function: InsertFunction,
+    indices: Vec<usize>,
 }
 
 impl Writer {
@@ -111,11 +128,20 @@ impl Writer {
         let mut v = Writer {
             image: (&image.into_rgb32f()).into(), // convert to YIQ color space
             planner: DctPlanner::<f32>::new(),
+            indices: vec![],
             insertion_function,
         };
         v.perform_dct(); // perform DCT on Y channel.
+        v.update_indices(); // determine the coefficient order.
         v
     }
+
+    /// Function that determines which indices should be operated on.
+    fn update_indices(&mut self) {
+        let coefficients = &self.image.y().as_flat_samples().samples;
+        self.indices = obtain_indices_from_coefficient_magnitude(coefficients);
+    }
+
 
     /// Perform the DCT on the Y channel.
     fn perform_dct(&mut self) {
@@ -137,7 +163,7 @@ impl Writer {
         let y_channel = &mut self.image.y_mut().as_flat_samples_mut().samples;
 
         // Embed the watermarks.
-        let mut embedder = Embedder::new(y_channel, &self.insertion_function);
+        let mut embedder = Embedder::new(y_channel, &self.indices, &self.insertion_function);
         // embedder.set_insert_function(insertion_function);
         for mark in marks.iter() {
             embedder.add(mark.clone());
@@ -176,7 +202,7 @@ impl Writer {
 /// changed the order of the coefficients.
 struct Embedder<'a, 'b> {
     coefficients: &'a mut [f32],
-    indices: Vec<usize>,
+    indices: &'a [usize],
     watermarks: Vec<Mark>,
     insert_function: &'b InsertFunction,
 }
@@ -191,20 +217,14 @@ impl<'a, 'b> Embedder<'a, 'b> {
     }
 
     /// Create a new embedder, operating on the provided slice of coefficients.
-    pub fn new(coefficients: &'a mut [f32], insert_function: &'b InsertFunction) -> Self {
+    pub fn new(coefficients: &'a mut [f32], indices: &'a [usize], insert_function: &'b InsertFunction) -> Self {
         let mut v = Embedder {
             coefficients,
-            indices: vec![],
+            indices,
             watermarks: vec![],
             insert_function,
         };
-        v.update_indices();
         v
-    }
-
-    /// Function that determines which indices should be operated on.
-    fn update_indices(&mut self) {
-        self.indices = obtain_indices_from_coefficient_magnitude(&self.coefficients);
     }
 
     /// Retrieve the sorted (highest priority first) list of indices.
@@ -313,8 +333,43 @@ impl Reader {
     pub fn extract(&self, derived: &ReaderDerived, extracted: &mut [f32]) {
         unimplemented!();
     }
-
 }
+
+
+/// Inverse of the Embedder
+struct Extractor<'a, 'b> {
+    coefficients: &'a mut [f32],
+    indices: &'a [usize],
+    extract_function: &'b ExtractFunction,
+}
+
+
+// def extract_function(V, Vstar, alpha=0.1):
+    // # inverse of the embed function...
+    // return (Vstar - V) / (V * alpha)
+
+impl<'a, 'b> Extractor<'a, 'b> {
+    /// Create the extraction function for x_i' = x_i (1 + alpha * w_i), with scaling as
+    /// provided. So that becomes w_i = (x_i' - x_i) / (x_i * alpha)
+    pub fn make_extract_function_2(scaling: f32) -> ExtractFunction {
+        Box::new(move |_index, original_value, mark_value| {
+            original_value * (1.0 + scaling * mark_value)
+        })
+    }
+
+    /// Create a new embedder, operating on the provided slice of coefficients.
+    pub fn new(coefficients: &'a mut [f32], indices: &'a [usize], extract_function: &'b ExtractFunction) -> Self {
+        let mut v = Extractor {
+            coefficients,
+            indices,
+            extract_function,
+        };
+        v
+    }
+}
+
+
+
 /// Mark to be embedded, ultimately converted into sequence of floats
 ///
 /// The paper recommends using a 0 mean sigma^2 = 1 standard distribution to determine the sequence
@@ -365,9 +420,6 @@ fn obtain_indices_from_coefficient_magnitude(coefficients: &[f32]) -> Vec<usize>
 }
 
 
-/// Inverse of the Embedder
-struct Extractor {}
-
 /// Test whether a watermark is present in the extracted signal.
 pub struct Tester {}
 
@@ -379,7 +431,8 @@ mod tests {
     fn test_embedder_indices() {
         let insert_function = Embedder::make_insert_function_2(0.1);
         let mut coefficients = [-3f32, 5.0, -8.0, 7.0, 1.0, 2.0];
-        let mut embedder = Embedder::new(&mut coefficients, &insert_function);
+        let indices = obtain_indices_from_coefficient_magnitude(&coefficients);
+        let mut embedder = Embedder::new(&mut coefficients, &indices, &insert_function);
         assert_eq!(embedder.indices(), &[2, 3, 1, 5, 4]);
     }
 
@@ -387,7 +440,8 @@ mod tests {
     fn test_embedder_single() {
         let insert_function = Embedder::make_insert_function_2(0.1);
         let mut coefficients = [-3f32, 5.0, -8.0, 7.0, 1.0, 2.0];
-        let mut embedder = Embedder::new(&mut coefficients, &insert_function);
+        let indices = obtain_indices_from_coefficient_magnitude(&coefficients);
+        let mut embedder = Embedder::new(&mut coefficients, &indices, &insert_function);
         let mark = Mark::from(&[1.0, -0.5, 1.0]);
 
         embedder.add(mark);
@@ -410,7 +464,8 @@ mod tests {
     fn test_embedder_single_and_zero() {
         let insert_function = Embedder::make_insert_function_2(0.1);
         let mut coefficients = [-3f32, 5.0, -8.0, 7.0, 1.0, 2.0];
-        let mut embedder = Embedder::new(&mut coefficients, &insert_function);
+        let indices = obtain_indices_from_coefficient_magnitude(&coefficients);
+        let mut embedder = Embedder::new(&mut coefficients, &indices, &insert_function);
         let mark1 = Mark::from(&[1.0, -0.5, 1.0]);
         let mark2 = Mark::from(&[0.0, 0.0, 0.0]);
 
@@ -435,7 +490,8 @@ mod tests {
     fn test_embedder_multiple() {
         let insert_function = Embedder::make_insert_function_2(0.1);
         let mut coefficients = [-3f32, 5.0, -8.0, 7.0, 1.0, 2.0];
-        let mut embedder = Embedder::new(&mut coefficients, &insert_function);
+        let indices = obtain_indices_from_coefficient_magnitude(&coefficients);
+        let mut embedder = Embedder::new(&mut coefficients, &indices, &insert_function);
         let mark1 = Mark::from(&[1.0, -0.5, 1.0]);
         let mark2 = Mark::from(&[0.5, -0.5, -1.0]);
 

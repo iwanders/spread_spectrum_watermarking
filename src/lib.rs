@@ -10,11 +10,13 @@ pub fn do_thing(image_path: &PathBuf) {
     let orig_image =
         image::open(&image_path).expect(&format!("could not load image at {:?}", image_path));
 
+    let orig_base = orig_image.clone();
+
     let config = algorithm::WriteConfig::default();
     let mut watermarker = algorithm::Writer::new(orig_image, config);
 
-    let mark = algorithm::Mark::from(&[
-        1.5662269184308768,
+    let mark_data = [
+        1.5662269184308768f32,
         -0.139376843912537,
         1.2815220015684436,
         -0.20421716511630486,
@@ -114,12 +116,23 @@ pub fn do_thing(image_path: &PathBuf) {
         -0.031564541990516434,
         0.5224353745484088,
         2.7456791406097314,
-    ]);
+    ];
+    let mark = algorithm::Mark::from(&mark_data);
     watermarker.mark(&[mark]);
     let res = watermarker.result();
+
+    let image_derived = res.clone();
 
     let img_back_to_rgb = res.into_rgb8();
     img_back_to_rgb
         .save(&PathBuf::from("/tmp/watermarked.png"))
         .expect("may not fail");
+
+    let read_config = algorithm::ReadConfig::default();
+    let reader = algorithm::Reader::base(orig_base, read_config);
+    let derived = algorithm::Reader::derived(image_derived);
+    let mut extracted_mark = vec![0f32; mark_data.len()];
+    reader.extract(&derived, &mut extracted_mark);
+
+    println!("extracted: {extracted_mark:#?}");
 }

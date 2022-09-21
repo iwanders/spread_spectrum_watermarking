@@ -25,8 +25,9 @@
 // [x] Denotes fixed in this implementation.
 
 // More food for thought:
-// [ ] Is the current approach of taking the highest absolute coefficient the correct approach?
-//
+// - Is the current approach of taking the highest absolute coefficient the correct approach?
+// - Do the Embedder and Extractor serve any purpose besides allowing for easier unit testing?
+//   Should they just be free functions instead?
 
 use rustdct::DctPlanner;
 /// Function used to embed the watermark into coefficients.

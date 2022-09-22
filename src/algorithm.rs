@@ -24,9 +24,6 @@
 //
 // [x] Denotes fixed in this implementation.
 
-// More food for thought:
-// - Is the current approach of taking the highest absolute coefficient the correct approach?
-
 use rustdct::DctPlanner;
 /// Function used to embed the watermark into coefficients.
 ///
@@ -136,7 +133,7 @@ impl Writer {
     /// Function that determines which indices should be operated on.
     fn update_indices(&mut self) {
         let coefficients = &self.image.y().as_flat_samples().samples;
-        self.indices = obtain_indices_from_coefficient_magnitude(coefficients);
+        self.indices = obtain_indices_by_energy(coefficients);
     }
 
     /// Perform the DCT on the Y channel.
@@ -182,14 +179,6 @@ impl Writer {
         image::DynamicImage::ImageRgb32F(img_back_to_rgb_f32)
     }
 
-    /// Create the insertion function of type x_i' = x_i (1 + alpha * w_i), with scaling as
-    /// provided.
-    pub fn make_insert_function_2(scaling: f32) -> InsertFunction {
-        Box::new(move |_index, original_value, mark_value| {
-            original_value * (1.0 + scaling * mark_value)
-        })
-    }
-
     /// Modify the coefficients and embed all the added watermarks into them.
     fn embed_watermark(
         coefficients: &mut [f32],
@@ -215,6 +204,14 @@ impl Writer {
                 }
             }
         }
+    }
+
+    /// Create the insertion function of type x_i' = x_i (1 + alpha * w_i), with scaling as
+    /// provided.
+    pub fn make_insert_function_2(scaling: f32) -> InsertFunction {
+        Box::new(move |_index, original_value, mark_value| {
+            original_value * (1.0 + scaling * mark_value)
+        })
     }
 }
 
@@ -271,7 +268,7 @@ impl Reader {
                 Extraction::Custom(v) => v,
             };
             let coefficients = &v.image.y().as_flat_samples().samples;
-            let indices = obtain_indices_from_coefficient_magnitude(coefficients);
+            let indices = obtain_indices_by_energy(coefficients);
             v.base = Some(ReaderBase {
                 indices,
                 extract_function,
@@ -301,8 +298,7 @@ impl Reader {
 
     pub fn extract(&self, derived: &ReaderDerived, extracted: &mut [f32]) {
         let base = self.base.as_ref().unwrap();
-        // let extractor = Extractor::new(&self.coefficients(), &base.indices, &base.extract_function);
-        // extractor.extract(derived.0.coefficients(), extracted);
+
         Self::extract_watermark(
             self.coefficients(),
             &base.indices,
@@ -382,12 +378,16 @@ impl Mark {
     }
 }
 
-fn obtain_indices_from_coefficient_magnitude(coefficients: &[f32]) -> Vec<usize> {
+/// Obtain a sorted vector of indices based on the energy.
+///
+/// Energy in a DCT is the amplitude squared. This skips the zeroth coefficient as that is the DC
+/// gain.
+fn obtain_indices_by_energy(coefficients: &[f32]) -> Vec<usize> {
     let mut coeff_abs_index = coefficients
         .iter()
         .enumerate()
         .skip(1)
-        .map(|(index, coeff)| (coeff.abs(), index))
+        .map(|(index, coeff)| (coeff * coeff, index))
         .collect::<Vec<_>>();
     coeff_abs_index.sort_by(|a, b| b.0.total_cmp(&a.0));
     coeff_abs_index
@@ -406,7 +406,7 @@ mod tests {
     #[test]
     fn test_indices() {
         let coefficients = [-3f32, 5.0, -8.0, 7.0, 1.0, 2.0];
-        let indices = obtain_indices_from_coefficient_magnitude(&coefficients);
+        let indices = obtain_indices_by_energy(&coefficients);
         assert_eq!(indices, &[2, 3, 1, 5, 4]);
     }
 
@@ -416,7 +416,7 @@ mod tests {
         let extract_function = Reader::make_extract_function_2(0.1);
         let base_coefficients = [-3f32, 5.0, -8.0, 7.0, 1.0, 2.0];
         let mut coefficients = base_coefficients.clone();
-        let indices = obtain_indices_from_coefficient_magnitude(&coefficients);
+        let indices = obtain_indices_by_energy(&coefficients);
         let mark1_data = [1.0, -0.5, 1.0];
         let mark = Mark::from(&mark1_data);
 
@@ -452,7 +452,7 @@ mod tests {
     fn test_embedder_single_and_zero() {
         let insert_function = Writer::make_insert_function_2(0.1);
         let mut coefficients = [-3f32, 5.0, -8.0, 7.0, 1.0, 2.0];
-        let indices = obtain_indices_from_coefficient_magnitude(&coefficients);
+        let indices = obtain_indices_by_energy(&coefficients);
 
         let mark1 = Mark::from(&[1.0, -0.5, 1.0]);
         let mark2 = Mark::from(&[0.0, 0.0, 0.0]);
@@ -481,7 +481,7 @@ mod tests {
     fn test_embedder_multiple() {
         let insert_function = Writer::make_insert_function_2(0.1);
         let mut coefficients = [-3f32, 5.0, -8.0, 7.0, 1.0, 2.0];
-        let indices = obtain_indices_from_coefficient_magnitude(&coefficients);
+        let indices = obtain_indices_by_energy(&coefficients);
 
         let mark1 = Mark::from(&[1.0, -0.5, 1.0]);
         let mark2 = Mark::from(&[0.5, -0.5, -1.0]);

@@ -162,10 +162,15 @@ impl Writer {
         // let mut embedder = Embedder::new(y_channel, &self.indices, &self.insertion_function);
         // embedder.set_insert_function(insertion_function);
         // for mark in marks.iter() {
-            // embedder.add(mark.clone());
+        // embedder.add(mark.clone());
         // }
         // embedder.finalize();
-        Self::embed_watermark(&mut coefficients, &self.indices, &self.insert_function, marks);
+        Self::embed_watermark(
+            &mut coefficients,
+            &self.indices,
+            &self.insert_function,
+            marks,
+        );
     }
 
     /// Consume the watermarker, performing the in-place dct and returning a [`image::DynamicImage`].
@@ -189,7 +194,6 @@ impl Writer {
         image::DynamicImage::ImageRgb32F(img_back_to_rgb_f32)
     }
 
-
     /// Create the insertion function of type x_i' = x_i (1 + alpha * w_i), with scaling as
     /// provided.
     pub fn make_insert_function_2(scaling: f32) -> InsertFunction {
@@ -198,9 +202,8 @@ impl Writer {
         })
     }
 
-
     /// Modify the coefficients and embed all the added watermarks into them.
-    pub fn embed_watermark(
+    fn embed_watermark(
         coefficients: &mut [f32],
         indices: &[usize],
         insert_function: &InsertFunction,
@@ -226,7 +229,6 @@ impl Writer {
         }
     }
 }
-
 
 struct ReaderBase {
     indices: Vec<usize>,
@@ -277,7 +279,7 @@ impl Reader {
         if is_base {
             let config = config.unwrap();
             let extract_function = match config.extraction {
-                Extraction::Option2(scaling) => Extractor::make_extract_function_2(scaling),
+                Extraction::Option2(scaling) => Reader::make_extract_function_2(scaling),
                 Extraction::Custom(v) => v,
             };
             let coefficients = &v.image.y().as_flat_samples().samples;
@@ -311,19 +313,40 @@ impl Reader {
 
     pub fn extract(&self, derived: &ReaderDerived, extracted: &mut [f32]) {
         let base = self.base.as_ref().unwrap();
-        let extractor = Extractor::new(&self.coefficients(), &base.indices, &base.extract_function);
-        extractor.extract(derived.0.coefficients(), extracted);
+        // let extractor = Extractor::new(&self.coefficients(), &base.indices, &base.extract_function);
+        // extractor.extract(derived.0.coefficients(), extracted);
+        Self::extract_watermark(
+            &self.coefficients(),
+            &base.indices,
+            &base.extract_function,
+            &derived.0.coefficients(),
+            extracted,
+        );
     }
-}
 
-/// Inverse of the Embedder
-struct Extractor<'a, 'b> {
-    base_coefficients: &'a [f32],
-    indices: &'a [usize],
-    extract_function: &'b ExtractFunction,
-}
+    /// Extract a watermark into the slice. Panics if the size of extracted exceeds coefficients or
+    /// if the derived_coefficients length doesn't match the base_coefficients.
+    fn extract_watermark(
+        base_coefficients: &[f32],
+        indices: &[usize],
+        extract_function: &ExtractFunction,
+        derived_coefficients: &[f32],
+        extracted: &mut [f32],
+    ) {
+        if derived_coefficients.len() != base_coefficients.len() {
+            panic!("Derived coefficient length not equal to base coefficient length.");
+        }
+        if extracted.len() >= base_coefficients.len() {
+            panic!("Desired extraction length exceeds available coefficients.");
+        }
+        for i in 0..extracted.len() {
+            let coefficient_index = indices[i];
+            let original_value = base_coefficients[coefficient_index];
+            let derived_value = derived_coefficients[coefficient_index];
+            extracted[i] = (*extract_function)(coefficient_index, original_value, derived_value);
+        }
+    }
 
-impl<'a, 'b> Extractor<'a, 'b> {
     /// Create the extraction function for x_i' = x_i (1 + alpha * w_i), with scaling as
     /// provided. So that becomes w_i = (x_i' - x_i) / (x_i * alpha).
     pub fn make_extract_function_2(scaling: f32) -> ExtractFunction {
@@ -333,38 +356,6 @@ impl<'a, 'b> Extractor<'a, 'b> {
                     / (original_value_in_base_image * scaling)
             },
         )
-    }
-
-    /// Create a new extractor, operating on the provided slice of coefficients.
-    pub fn new(
-        base_coefficients: &'a [f32],
-        indices: &'a [usize],
-        extract_function: &'b ExtractFunction,
-    ) -> Self {
-        let v = Extractor {
-            base_coefficients,
-            indices,
-            extract_function,
-        };
-        v
-    }
-
-    /// Extract a watermark into the slice. Panics if the size of extracted exceeds coefficients or
-    /// if the derived_coefficients length doesn't match the base_coefficients.
-    pub fn extract(&self, derived_coefficients: &[f32], extracted: &mut [f32]) {
-        if derived_coefficients.len() != self.base_coefficients.len() {
-            panic!("Derived coefficient length not equal to base coefficient length.");
-        }
-        if extracted.len() >= self.base_coefficients.len() {
-            panic!("Desired extraction length exceeds available coefficients.");
-        }
-        for i in 0..extracted.len() {
-            let coefficient_index = self.indices[i];
-            let original_value = self.base_coefficients[coefficient_index];
-            let derived_value = derived_coefficients[coefficient_index];
-            extracted[i] =
-                (*self.extract_function)(coefficient_index, original_value, derived_value);
-        }
     }
 }
 
@@ -425,8 +416,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_embedder_indices() {
-        let mut coefficients = [-3f32, 5.0, -8.0, 7.0, 1.0, 2.0];
+    fn test_indices() {
+        let coefficients = [-3f32, 5.0, -8.0, 7.0, 1.0, 2.0];
         let indices = obtain_indices_from_coefficient_magnitude(&coefficients);
         assert_eq!(indices, &[2, 3, 1, 5, 4]);
     }
@@ -434,7 +425,7 @@ mod tests {
     #[test]
     fn test_embedder_single() {
         let insert_function = Writer::make_insert_function_2(0.1);
-        let extract_function = Extractor::make_extract_function_2(0.1);
+        let extract_function = Reader::make_extract_function_2(0.1);
         let base_coefficients = [-3f32, 5.0, -8.0, 7.0, 1.0, 2.0];
         let mut coefficients = base_coefficients.clone();
         let indices = obtain_indices_from_coefficient_magnitude(&coefficients);
@@ -454,9 +445,16 @@ mod tests {
                 2.0
             ]
         );
-        let extractor = Extractor::new(&base_coefficients, &indices, &extract_function);
+        // let extractor = Extractor::new(&base_coefficients, &indices, &extract_function);
         let mut extracted = [0f32; 3];
-        extractor.extract(&coefficients, &mut extracted);
+        // extractor.extract(&coefficients, &mut extracted);
+        Reader::extract_watermark(
+            &base_coefficients,
+            &indices,
+            &extract_function,
+            &coefficients,
+            &mut extracted,
+        );
         for i in 0..mark1_data.len() {
             assert!((extracted[i] - mark1_data[i]).abs() < 0.000001);
         }
@@ -470,7 +468,12 @@ mod tests {
 
         let mark1 = Mark::from(&[1.0, -0.5, 1.0]);
         let mark2 = Mark::from(&[0.0, 0.0, 0.0]);
-        Writer::embed_watermark(&mut coefficients, &indices, &insert_function, &[mark1, mark2]);
+        Writer::embed_watermark(
+            &mut coefficients,
+            &indices,
+            &insert_function,
+            &[mark1, mark2],
+        );
 
         let scaling = 0.1;
         assert_eq!(
@@ -495,7 +498,12 @@ mod tests {
         let mark1 = Mark::from(&[1.0, -0.5, 1.0]);
         let mark2 = Mark::from(&[0.5, -0.5, -1.0]);
 
-        Writer::embed_watermark(&mut coefficients, &indices, &insert_function, &[mark1, mark2]);
+        Writer::embed_watermark(
+            &mut coefficients,
+            &indices,
+            &insert_function,
+            &[mark1, mark2],
+        );
 
         let scaling = 0.1;
         let d_v2_from_mark1 = -8.0 * (1.0 + 1.0 * scaling) - -8.0;

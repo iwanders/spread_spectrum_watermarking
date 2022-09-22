@@ -61,22 +61,22 @@ impl YIQ32FImage {
     }
 
     /// Accessor for the luma.
-    pub fn y<'a>(&'a self) -> &Luma32FImage {
+    pub fn y(&self) -> &Luma32FImage {
         &self.y
     }
 
     /// Accessor for the luma.
-    pub fn y_mut<'a>(&'a mut self) -> &mut Luma32FImage {
+    pub fn y_mut(&mut self) -> &mut Luma32FImage {
         &mut self.y
     }
 
     /// Accessor for I component.
-    pub fn i<'a>(&'a self) -> &Luma32FImage {
+    pub fn i(&self) -> &Luma32FImage {
         &self.i
     }
 
     /// Accessor for Q component.
-    pub fn q<'a>(&'a self) -> &Luma32FImage {
+    pub fn q(&self) -> &Luma32FImage {
         &self.q
     }
 
@@ -91,12 +91,12 @@ impl YIQ32FImage {
     }
 
     /// Iterator over the individual pixels.
-    pub fn pixels<'a>(&'a self) -> YIQ32FIterator {
+    pub fn pixels(&self) -> YIQ32FIterator {
         YIQ32FIterator(self.y.pixels(), self.i.pixels(), self.q.pixels())
     }
 
     /// Mutable iterator over the individual pixels.
-    pub fn pixels_mut<'a>(&'a mut self) -> YIQ32FIteratorMut {
+    pub fn pixels_mut(&mut self) -> YIQ32FIteratorMut {
         YIQ32FIteratorMut(
             self.y.pixels_mut(),
             self.i.pixels_mut(),
@@ -112,20 +112,8 @@ struct Matrix3x3 {
 
 impl Matrix3x3 {
     /// Create a new 3x3 matrix.
-    pub const fn new(
-        v00: f32,
-        v01: f32,
-        v02: f32,
-        v10: f32,
-        v11: f32,
-        v12: f32,
-        v20: f32,
-        v21: f32,
-        v22: f32,
-    ) -> Self {
-        Matrix3x3 {
-            data: [[v00, v01, v02], [v10, v11, v12], [v20, v21, v22]],
-        }
+    pub const fn new(data: [[f32; 3]; 3]) -> Self {
+        Matrix3x3 { data }
     }
 
     /// Perform the matrix product with a 3 long vector.
@@ -155,15 +143,15 @@ impl Matrix3x3 {
 
 #[rustfmt::skip]
 //                                                     r      g      b
-const RGB_TO_YIQ_MATRIX: Matrix3x3 = Matrix3x3::new(0.30,  0.59,  0.11,  // y 
-                                                    0.60, -0.28, -0.32,  // i 
-                                                    0.21, -0.52,  0.31); // q
+const RGB_TO_YIQ_MATRIX: Matrix3x3 = Matrix3x3::new([[0.30,  0.59,  0.11],  // y 
+                                                     [0.60, -0.28, -0.32],  // i 
+                                                     [0.21, -0.52,  0.31]]); // q
 
 #[rustfmt::skip]
-//                                                    y          i          q
-const YIQ_TO_RGB_MATRIX: Matrix3x3 = Matrix3x3::new(1.0,  0.948262,  0.624013,  // r 
-                                                    1.0, -0.276066, -0.639810,  // g 
-                                                    1.0, -1.105450,  1.729860); // b
+//                                                      y          i          q
+const YIQ_TO_RGB_MATRIX: Matrix3x3 = Matrix3x3::new([[1.0,  0.948262,  0.624013],  // r 
+                                                     [1.0, -0.276066, -0.639810],  // g 
+                                                     [1.0, -1.105450,  1.729860]]); // b
 
 /// Function to convert an rgb array to an yiq array.
 fn rgb_to_yiq(rgb: &[f32]) -> [f32; 3] {

@@ -156,21 +156,9 @@ impl Writer {
 
     /// Mark the image with the provided watermarks, given the configuration.
     pub fn mark(&mut self, marks: &[Mark]) {
-        let mut coefficients = &mut self.image.y_mut().as_flat_samples_mut().samples;
+        let coefficients = &mut self.image.y_mut().as_flat_samples_mut().samples;
 
-        // Embed the watermarks.
-        // let mut embedder = Embedder::new(y_channel, &self.indices, &self.insertion_function);
-        // embedder.set_insert_function(insertion_function);
-        // for mark in marks.iter() {
-        // embedder.add(mark.clone());
-        // }
-        // embedder.finalize();
-        Self::embed_watermark(
-            &mut coefficients,
-            &self.indices,
-            &self.insert_function,
-            marks,
-        );
+        Self::embed_watermark(coefficients, &self.indices, &self.insert_function, marks);
     }
 
     /// Consume the watermarker, performing the in-place dct and returning a [`image::DynamicImage`].
@@ -223,7 +211,7 @@ impl Writer {
                     let updated =
                         (*insert_function)(*index, original_coefficients[*index], *watermark);
                     let change = updated - original_coefficients[*index];
-                    coefficients[*index] = coefficients[*index] + change;
+                    coefficients[*index] += change;
                 }
             }
         }
@@ -283,7 +271,7 @@ impl Reader {
                 Extraction::Custom(v) => v,
             };
             let coefficients = &v.image.y().as_flat_samples().samples;
-            let indices = obtain_indices_from_coefficient_magnitude(&coefficients);
+            let indices = obtain_indices_from_coefficient_magnitude(coefficients);
             v.base = Some(ReaderBase {
                 indices,
                 extract_function,
@@ -293,7 +281,7 @@ impl Reader {
     }
 
     fn coefficients(&self) -> &[f32] {
-        &self.image.y().as_flat_samples().samples
+        self.image.y().as_flat_samples().samples
     }
 
     /// Perform the DCT on the Y channel.
@@ -316,10 +304,10 @@ impl Reader {
         // let extractor = Extractor::new(&self.coefficients(), &base.indices, &base.extract_function);
         // extractor.extract(derived.0.coefficients(), extracted);
         Self::extract_watermark(
-            &self.coefficients(),
+            self.coefficients(),
             &base.indices,
             &base.extract_function,
-            &derived.0.coefficients(),
+            derived.0.coefficients(),
             extracted,
         );
     }

@@ -1,4 +1,5 @@
-// pub mod util;
+#![allow(clippy::excessive_precision)]
+
 pub mod algorithm;
 pub mod dct2d;
 pub mod util;
@@ -7,8 +8,8 @@ pub mod yiq;
 use std::path::PathBuf;
 
 pub fn do_thing(image_path: &PathBuf) {
-    let orig_image =
-        image::open(&image_path).expect(&format!("could not load image at {:?}", image_path));
+    let orig_image = image::open(&image_path)
+        .unwrap_or_else(|_| panic!("could not load image at {:?}", image_path));
 
     let orig_base = orig_image.clone();
 

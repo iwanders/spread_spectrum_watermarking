@@ -130,6 +130,10 @@ impl Writer {
         v
     }
 
+    pub fn coefficient_image(&self) -> &crate::yiq::Luma32FImage {
+        self.image.y()
+    }
+
     /// Function that determines which indices should be operated on.
     fn update_indices(&mut self) {
         let coefficients = &self.image.y().as_flat_samples().samples;

@@ -130,6 +130,7 @@ impl Writer {
         v
     }
 
+    /// Obtain the [`Luma32FImage`] that holds the coefficients.
     pub fn coefficient_image(&self) -> &crate::yiq::Luma32FImage {
         self.image.y()
     }
@@ -155,16 +156,24 @@ impl Writer {
         );
     }
 
-    /// Mark the image with the provided watermarks, given the configuration.
-    pub fn mark(mut self, marks: &[Mark]) -> image::DynamicImage {
+    /// Embed these watermarks, but don't return the image yet.
+    ///
+    /// This is useful if one wants to inspect the coefficients. This should only be called once.
+    /// Usually, it is better to use the [`mark`] method instead.
+    pub fn embed(&mut self, marks: &[Mark]) {
         let coefficients = &mut self.image.y_mut().as_flat_samples_mut().samples;
 
         Self::embed_watermark(coefficients, &self.indices, &self.insert_function, marks);
+    }
+
+    /// Mark the image with the provided watermarks and return the image.
+    pub fn mark(mut self, marks: &[Mark]) -> image::DynamicImage {
+        self.embed(marks);
         self.result()
     }
 
-    /// Consume the watermarker, performing the in-place dct and returning a [`image::DynamicImage`].
-    fn result(mut self) -> image::DynamicImage {
+    /// Consume the writer, performing the in-place dct and returning a [`image::DynamicImage`].
+    pub fn result(mut self) -> image::DynamicImage {
         let width = self.image.width() as usize;
         let height = self.image.height() as usize;
 

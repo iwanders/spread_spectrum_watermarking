@@ -152,14 +152,15 @@ impl Writer {
     }
 
     /// Mark the image with the provided watermarks, given the configuration.
-    pub fn mark(&mut self, marks: &[Mark]) {
+    pub fn mark(mut self, marks: &[Mark]) -> image::DynamicImage {
         let coefficients = &mut self.image.y_mut().as_flat_samples_mut().samples;
 
         Self::embed_watermark(coefficients, &self.indices, &self.insert_function, marks);
+        self.result()
     }
 
     /// Consume the watermarker, performing the in-place dct and returning a [`image::DynamicImage`].
-    pub fn result(mut self) -> image::DynamicImage {
+    fn result(mut self) -> image::DynamicImage {
         let width = self.image.width() as usize;
         let height = self.image.height() as usize;
 
@@ -359,6 +360,16 @@ impl Mark {
         Mark { data: vec![] }
     }
 
+    /// Generate a new random watermark from a normal distribution.
+    pub fn generate_normal(length: usize) -> Self {
+        use rand::prelude::*;
+        use rand_distr::StandardNormal;
+
+        let mut data =  Vec::with_capacity(length);
+        data.resize_with(length, || thread_rng().sample(StandardNormal));
+        Mark { data }
+    }
+
     /// Create a new marker, populating the marker from the data slice.
     pub fn from(data: &[f32]) -> Self {
         Mark {
@@ -396,8 +407,44 @@ fn obtain_indices_by_energy(coefficients: &[f32]) -> Vec<usize> {
         .collect()
 }
 
+#[derive(Debug)]
+pub struct Similarity {
+    pub similarity: f32,
+}
+
+impl Similarity {
+    /// Returns true if the similarity exceeds more than n sigma's, if the watermarks are sampled
+    /// from N(0, 1).
+    pub fn exceeds_sigma(&self, n_sigma: f32) -> bool {
+        self.similarity > n_sigma
+    }
+}
+
 /// Test whether a watermark is present in the extracted signal.
-pub struct Tester {}
+pub struct Tester<'a> {
+    extracted_watermark: &'a [f32],
+}
+
+impl<'a> Tester<'a> {
+    // Possibly pass in preprocessing information.
+    pub fn new(extracted_watermark: &'a [f32]) -> Self {
+        Tester{extracted_watermark}
+    }
+
+    pub fn similarity(&self, comparison_watermark: &[f32]) -> Similarity {
+        assert_eq!(self.extracted_watermark.len(), comparison_watermark.len());
+        // extracted is X*
+        let mut nominator = 0.0;
+        let mut denominator = 0.0;
+        for (extracted, comparison) in self.extracted_watermark.iter().zip(comparison_watermark.iter()) {
+            nominator += extracted * comparison;
+            denominator += extracted * extracted;
+        }
+        let similarity = nominator / denominator.sqrt();
+        Similarity{similarity}
+    }
+}
+
 
 #[cfg(test)]
 mod tests {

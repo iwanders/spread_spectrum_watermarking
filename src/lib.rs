@@ -14,8 +14,7 @@ pub fn do_thing(image_path: &PathBuf) {
     let orig_base = orig_image.clone();
 
     let config = algorithm::WriteConfig::default();
-    let mut watermarker = algorithm::Writer::new(orig_image, config);
-
+    let watermarker = algorithm::Writer::new(orig_image, config);
     let mark_data = [
         1.5662269184308768f32,
         -0.139376843912537,
@@ -118,9 +117,10 @@ pub fn do_thing(image_path: &PathBuf) {
         0.5224353745484088,
         2.7456791406097314,
     ];
-    let mark = algorithm::Mark::from(&mark_data);
-    watermarker.mark(&[mark]);
-    let res = watermarker.result();
+    // let mark = algorithm::Mark::from(&mark_data);
+    let mark = algorithm::Mark::generate_normal(1000);
+    println!("Mark: {mark:?}");
+    let res = watermarker.mark(&[mark]);
 
     let image_derived = res.clone();
 
@@ -135,5 +135,11 @@ pub fn do_thing(image_path: &PathBuf) {
     let mut extracted_mark = vec![0f32; mark_data.len()];
     reader.extract(&derived, &mut extracted_mark);
 
+    let tester = algorithm::Tester::new(&extracted_mark);
+    let sim = tester.similarity(&mark_data);
+
     println!("extracted: {extracted_mark:#?}");
+    println!("sim: {sim:?}");
+    println!("exceeds 6 sigma: {}", sim.exceeds_sigma(6.0));
+
 }

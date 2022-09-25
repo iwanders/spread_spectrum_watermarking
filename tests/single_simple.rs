@@ -27,17 +27,17 @@ fn embed_extract_test() {
     // println!("embedded_mark: {embedded_mark:?}");
 
     // Write the watermark.
-    let config = wm::algorithm::WriteConfig::default();
-    let watermarker = wm::algorithm::Writer::new(orig_image, config);
+    let config = wm::WriteConfig::default();
+    let watermarker = wm::Writer::new(orig_image, config);
     let res = watermarker.mark(&[&embedded_mark]);
 
     // Quantize the image back into a standard 8 bit per channel image.
     let img_back_to_rgb = image::DynamicImage::ImageRgb8(res.into_rgb8());
 
     // Create the reader for the watermark.
-    let read_config = wm::algorithm::ReadConfig::default();
-    let reader = wm::algorithm::Reader::base(orig_base, read_config);
-    let derived = wm::algorithm::Reader::derived(img_back_to_rgb);
+    let read_config = wm::ReadConfig::default();
+    let reader = wm::Reader::base(orig_base, read_config);
+    let derived = wm::Reader::derived(img_back_to_rgb);
 
     // Extract the watermark.
     let mut extracted_mark = vec![0f32; embedded_mark.len()];
@@ -58,7 +58,7 @@ fn embed_extract_test() {
     assert!(avg_error < 0.02f32);
 
     // Test create a tester for the watermark and query the similarity.
-    let tester = wm::algorithm::Tester::new(&extracted_mark);
+    let tester = wm::Tester::new(&extracted_mark);
     let embedded_sim = tester.similarity(&embedded_mark);
 
     // Check if the similarity exceeds many sigma's, similarity is 31.24

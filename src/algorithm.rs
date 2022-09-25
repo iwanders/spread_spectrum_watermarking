@@ -1,21 +1,4 @@
 //! Contains the actual logic that ties everything together.
-//!
-//! This algorithm is described in the following paper:
-//! J. Cox, J. Kilian, F. T. Leighton and T. Shamoon,
-//! "Secure spread spectrum watermarking for multimedia,"
-//! in IEEE Transactions on Image Processing, vol. 6, no. 12, pp. 1673-1687, Dec. 1997,
-//! doi: 10.1109/83.650120.
-//!
-//! This algorithm is described in (expired) patent US5930369.
-//!
-//! The main steps in the algorithm are:
-//! - Convert the image to YIQ color space.
-//! - Compute the discrete consine transform on the Y channel.
-//! - Sort the coefficients by energy, or another metric.
-//! - Embed the watermark in the coefficients, using equations from step 42 of the patent.
-//! - Perform the inverted discrete cosine transform using the updated coefficients.
-//! - Convert image back from YIQ to RGB color space.
-//!
 
 // Python implementation problems;
 // [x] The energy isn't taken, instead the coefficients are just sorted (not even by magnitude)

@@ -1,3 +1,11 @@
+//! Helpers to perform two dimensional discrete cosine transform.
+//!
+//! Scaling of the transforms is such that it matches Python's
+//! [scipy.fftpack](https://docs.scipy.org/doc/scipy/reference/generated/scipy.fftpack.dct.html)
+//! values.
+//! At the moment it's a pretty non-optimised implementation that does all rows and columns in
+//! sequence.
+
 use rustdct::DctNum;
 
 // https://github.com/mpizenberg/fft2d exists, but it doesn't handle f32s, which seems to be more

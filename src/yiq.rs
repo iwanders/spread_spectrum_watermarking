@@ -1,3 +1,14 @@
+//! Representation of an image in YIQ color space as well as conversion to and from.
+//!
+//! Stores an image in three independent [`Luma32FImage`] channels, which allow the Y component to
+//! be transformed to the DCT domain in-place.
+//!
+//!```
+//!use spread_spectrum_watermarking::yiq::*;
+//!let orig_image: image::Rgb32FImage = image::ImageBuffer::new(5, 5);
+//!let yiq_image: YIQ32FImage = (&orig_image).into();
+//!let rgb_back: image::Rgb32FImage = (&yiq_image).into();
+//!```
 use image::Pixel;
 
 /// Helper type to denote a f32 grayscale image.

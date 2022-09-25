@@ -79,7 +79,7 @@ impl Default for WriteConfig {
     }
 }
 
-/// Insertion method for the watermark.
+/// Extraction method for the watermark.
 pub enum Extraction {
     /// Inverse of option 2 from the paper; x_i' = x_i (1 + alpha * w_i),  alpha as specified.
     Option2(f32),
@@ -130,7 +130,7 @@ impl Writer {
         v
     }
 
-    /// Obtain the [`Luma32FImage`] that holds the coefficients.
+    /// Obtain the [`crate::yiq::Luma32FImage`] that holds the coefficients.
     pub fn coefficient_image(&self) -> &crate::yiq::Luma32FImage {
         self.image.y()
     }
@@ -159,7 +159,7 @@ impl Writer {
     /// Embed these watermarks, but don't return the image yet.
     ///
     /// This is useful if one wants to inspect the coefficients. This should only be called once.
-    /// Usually, it is better to use the [`mark`] method instead.
+    /// Usually, it is better to use the [`Self::mark`] method instead.
     pub fn embed(&mut self, marks: &[&dyn Mark]) {
         let coefficients = &mut self.image.y_mut().as_flat_samples_mut().samples;
 
@@ -310,6 +310,10 @@ impl Reader {
         );
     }
 
+    /// Extract a watermark from the provided derived image, writing to extracted.
+    ///
+    /// Length read is specified by extracted, panics if the length of extracted exceeds the amount
+    /// of coefficients in the image.
     pub fn extract(&self, derived: &ReaderDerived, extracted: &mut [f32]) {
         let base = self.base.as_ref().unwrap();
 
@@ -441,6 +445,7 @@ fn obtain_indices_by_energy(coefficients: &[f32]) -> Vec<usize> {
         .collect()
 }
 
+/// Representation of calculated similarity.
 #[derive(Debug)]
 pub struct Similarity {
     pub similarity: f32,
@@ -460,13 +465,14 @@ pub struct Tester<'a> {
 }
 
 impl<'a> Tester<'a> {
-    // Possibly pass in preprocessing information.
+    /// Create a new tester to work on an extracted watermark.
     pub fn new(extracted_watermark: &'a [f32]) -> Self {
         Tester {
             extracted_watermark,
         }
     }
 
+    /// Compute the similarity between the extracted and provided watermark.
     pub fn similarity(&self, comparison_watermark: &[f32]) -> Similarity {
         assert_eq!(self.extracted_watermark.len(), comparison_watermark.len());
         // extracted is X*

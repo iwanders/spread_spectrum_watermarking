@@ -160,14 +160,14 @@ impl Writer {
     ///
     /// This is useful if one wants to inspect the coefficients. This should only be called once.
     /// Usually, it is better to use the [`mark`] method instead.
-    pub fn embed(&mut self, marks: &[Mark]) {
+    pub fn embed(&mut self, marks: &[&dyn Mark]) {
         let coefficients = &mut self.image.y_mut().as_flat_samples_mut().samples;
 
         Self::embed_watermark(coefficients, &self.indices, &self.insert_function, marks);
     }
 
     /// Mark the image with the provided watermarks and return the image.
-    pub fn mark(mut self, marks: &[Mark]) -> image::DynamicImage {
+    pub fn mark(mut self, marks: &[&dyn Mark]) -> image::DynamicImage {
         self.embed(marks);
         self.result()
     }
@@ -198,7 +198,7 @@ impl Writer {
         coefficients: &mut [f32],
         indices: &[usize],
         insert_function: &InsertFunction,
-        watermarks: &[Mark],
+        watermarks: &[&dyn Mark],
     ) {
         // Actually modulate the watermarks onto the coefficients.
         // We want to always work against the original coefficients.
@@ -357,20 +357,26 @@ impl Reader {
     }
 }
 
+/// An embeddable watermark.
+pub trait Mark {
+    /// The data of the watermark as a f32 slice.
+    fn data(&self) -> &[f32];
+}
+
 /// Mark to be embedded, ultimately converted into sequence of floats
 ///
 /// The paper recommends using a 0 mean sigma^2 = 1 standard distribution to determine the sequence
 /// to be embedded.
 /// See paper section IV-D as to why using a binary signal is vulnerable to multi document attacks.
 #[derive(Clone, Debug)]
-pub struct Mark {
+pub struct MarkBuffer {
     data: Vec<f32>,
 }
 
-impl Mark {
+impl MarkBuffer {
     /// Create a new empty marker.
     pub fn new() -> Self {
-        Mark { data: vec![] }
+        MarkBuffer { data: vec![] }
     }
 
     /// Generate a new random watermark from a normal distribution.
@@ -378,14 +384,14 @@ impl Mark {
         use rand::prelude::*;
         use rand_distr::StandardNormal;
 
-        let mut data =  Vec::with_capacity(length);
+        let mut data = Vec::with_capacity(length);
         data.resize_with(length, || thread_rng().sample(StandardNormal));
-        Mark { data }
+        MarkBuffer { data }
     }
 
     /// Create a new marker, populating the marker from the data slice.
     pub fn from(data: &[f32]) -> Self {
-        Mark {
+        MarkBuffer {
             data: data.to_vec(),
         }
     }
@@ -399,6 +405,21 @@ impl Mark {
     pub fn set_data(&mut self, data: &[f32]) {
         self.data.resize(data.len(), 0.0);
         self.data.copy_from_slice(data);
+    }
+}
+
+impl Mark for MarkBuffer {
+    fn data(&self) -> &[f32] {
+        self.data()
+    }
+}
+
+impl<T: AsRef<[f32]>> Mark for T
+where
+    T: AsRef<[f32]>,
+{
+    fn data(&self) -> &[f32] {
+        self.as_ref()
     }
 }
 
@@ -441,7 +462,9 @@ pub struct Tester<'a> {
 impl<'a> Tester<'a> {
     // Possibly pass in preprocessing information.
     pub fn new(extracted_watermark: &'a [f32]) -> Self {
-        Tester{extracted_watermark}
+        Tester {
+            extracted_watermark,
+        }
     }
 
     pub fn similarity(&self, comparison_watermark: &[f32]) -> Similarity {
@@ -449,15 +472,18 @@ impl<'a> Tester<'a> {
         // extracted is X*
         let mut nominator = 0.0;
         let mut denominator = 0.0;
-        for (extracted, comparison) in self.extracted_watermark.iter().zip(comparison_watermark.iter()) {
+        for (extracted, comparison) in self
+            .extracted_watermark
+            .iter()
+            .zip(comparison_watermark.iter())
+        {
             nominator += extracted * comparison;
             denominator += extracted * extracted;
         }
         let similarity = nominator / denominator.sqrt();
-        Similarity{similarity}
+        Similarity { similarity }
     }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -478,9 +504,9 @@ mod tests {
         let mut coefficients = base_coefficients.clone();
         let indices = obtain_indices_by_energy(&coefficients);
         let mark1_data = [1.0, -0.5, 1.0];
-        let mark = Mark::from(&mark1_data);
+        let mark = MarkBuffer::from(&mark1_data);
 
-        Writer::embed_watermark(&mut coefficients, &indices, &insert_function, &[mark]);
+        Writer::embed_watermark(&mut coefficients, &indices, &insert_function, &[&mark]);
         let scaling = 0.1;
         assert_eq!(
             &coefficients,
@@ -514,13 +540,13 @@ mod tests {
         let mut coefficients = [-3f32, 5.0, -8.0, 7.0, 1.0, 2.0];
         let indices = obtain_indices_by_energy(&coefficients);
 
-        let mark1 = Mark::from(&[1.0, -0.5, 1.0]);
-        let mark2 = Mark::from(&[0.0, 0.0, 0.0]);
+        let mark1 = &[1.0f32, -0.5, 1.0];
+        let mark2 = &[0.0f32, 0.0, 0.0];
         Writer::embed_watermark(
             &mut coefficients,
             &indices,
             &insert_function,
-            &[mark1, mark2],
+            &[&mark1, &mark2],
         );
 
         let scaling = 0.1;
@@ -543,14 +569,14 @@ mod tests {
         let mut coefficients = [-3f32, 5.0, -8.0, 7.0, 1.0, 2.0];
         let indices = obtain_indices_by_energy(&coefficients);
 
-        let mark1 = Mark::from(&[1.0, -0.5, 1.0]);
-        let mark2 = Mark::from(&[0.5, -0.5, -1.0]);
+        let mark1 = MarkBuffer::from(&[1.0, -0.5, 1.0]);
+        let mark2 = MarkBuffer::from(&[0.5, -0.5, -1.0]);
 
         Writer::embed_watermark(
             &mut coefficients,
             &indices,
             &insert_function,
-            &[mark1, mark2],
+            &[&mark1, &mark2],
         );
 
         let scaling = 0.1;

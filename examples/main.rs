@@ -1,7 +1,5 @@
 use std::path::PathBuf;
-use spread_spectrum_watermarking::*;
-
-
+use spread_spectrum_watermarking as wm;
 
 fn do_thing(image_path: &PathBuf) {
     let orig_image = image::open(&image_path)
@@ -9,12 +7,12 @@ fn do_thing(image_path: &PathBuf) {
 
     let orig_base = orig_image.clone();
 
-    let mark = algorithm::MarkBuf::generate_normal(1000);
+    let mark = wm::MarkBuf::generate_normal(1000);
     let mark_data = mark.data().to_vec();
     println!("Mark: {mark:?}");
 
-    let config = algorithm::WriteConfig::default();
-    let watermarker = algorithm::Writer::new(orig_image, config);
+    let config = wm::WriteConfig::default();
+    let watermarker = wm::Writer::new(orig_image, config);
     let res = watermarker.mark(&[&mark]);
 
     let image_derived = res.clone();
@@ -24,14 +22,14 @@ fn do_thing(image_path: &PathBuf) {
         .save(&PathBuf::from("/tmp/watermarked.png"))
         .expect("may not fail");
 
-    let read_config = algorithm::ReadConfig::default();
-    let reader = algorithm::Reader::base(orig_base, read_config);
-    let derived = algorithm::Reader::derived(image_derived);
+    let read_config = wm::ReadConfig::default();
+    let reader = wm::Reader::base(orig_base, read_config);
+    let derived = wm::Reader::derived(image_derived);
 
     let mut extracted_mark = vec![0f32; mark_data.len()];
     reader.extract(&derived, &mut extracted_mark);
 
-    let tester = algorithm::Tester::new(&extracted_mark);
+    let tester = wm::Tester::new(&extracted_mark);
     let sim = tester.similarity(&mark_data);
 
     println!("extracted: {extracted_mark:#?}");

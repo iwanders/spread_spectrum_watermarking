@@ -13,7 +13,7 @@ pub fn do_thing(image_path: &PathBuf) {
 
     let orig_base = orig_image.clone();
 
-    let mark = algorithm::MarkBuffer::generate_normal(1000);
+    let mark = algorithm::MarkBuf::generate_normal(1000);
     let mark_data = mark.data().to_vec();
     println!("Mark: {mark:?}");
 

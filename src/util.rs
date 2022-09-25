@@ -13,3 +13,25 @@ pub fn dump_buffer_as_image(width: u32, height: u32, data: &[f32], path: &std::p
     .expect("Guaranteed dimensions");
     y_img.save(path).expect("may not fail");
 }
+
+pub fn approx_equal<T: rustdct::DctNum + std::cmp::PartialOrd + std::fmt::Display>(
+    a: &[T],
+    b: &[T],
+    max_error: T,
+) where
+    T: std::ops::Sub<T>,
+{
+    if a.len() != b.len() {
+        assert!(false, "a and b are not equal length");
+    }
+
+    for (i, (av, bv)) in a.iter().zip(b.iter()).enumerate() {
+        let delta = (*av - *bv).abs();
+        if delta > max_error {
+            assert!(
+                false,
+                "a: {a:?}, b: {b:?}, (a[{i}]: {av:?}, b[{i}]: {bv:?}), delta was {delta}, this exceeded allowed {max_error}."
+            );
+        }
+    }
+}

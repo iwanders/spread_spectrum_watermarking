@@ -369,14 +369,14 @@ pub trait Mark {
 /// to be embedded.
 /// See paper section IV-D as to why using a binary signal is vulnerable to multi document attacks.
 #[derive(Clone, Debug)]
-pub struct MarkBuffer {
+pub struct MarkBuf {
     data: Vec<f32>,
 }
 
-impl MarkBuffer {
+impl MarkBuf {
     /// Create a new empty marker.
     pub fn new() -> Self {
-        MarkBuffer { data: vec![] }
+        MarkBuf { data: vec![] }
     }
 
     /// Generate a new random watermark from a normal distribution.
@@ -386,12 +386,12 @@ impl MarkBuffer {
 
         let mut data = Vec::with_capacity(length);
         data.resize_with(length, || thread_rng().sample(StandardNormal));
-        MarkBuffer { data }
+        MarkBuf { data }
     }
 
     /// Create a new marker, populating the marker from the data slice.
     pub fn from(data: &[f32]) -> Self {
-        MarkBuffer {
+        MarkBuf {
             data: data.to_vec(),
         }
     }
@@ -408,7 +408,7 @@ impl MarkBuffer {
     }
 }
 
-impl Mark for MarkBuffer {
+impl Mark for MarkBuf {
     fn data(&self) -> &[f32] {
         self.data()
     }
@@ -504,7 +504,7 @@ mod tests {
         let mut coefficients = base_coefficients.clone();
         let indices = obtain_indices_by_energy(&coefficients);
         let mark1_data = [1.0, -0.5, 1.0];
-        let mark = MarkBuffer::from(&mark1_data);
+        let mark = MarkBuf::from(&mark1_data);
 
         Writer::embed_watermark(&mut coefficients, &indices, &insert_function, &[&mark]);
         let scaling = 0.1;
@@ -569,8 +569,8 @@ mod tests {
         let mut coefficients = [-3f32, 5.0, -8.0, 7.0, 1.0, 2.0];
         let indices = obtain_indices_by_energy(&coefficients);
 
-        let mark1 = MarkBuffer::from(&[1.0, -0.5, 1.0]);
-        let mark2 = MarkBuffer::from(&[0.5, -0.5, -1.0]);
+        let mark1 = MarkBuf::from(&[1.0, -0.5, 1.0]);
+        let mark2 = MarkBuf::from(&[0.5, -0.5, -1.0]);
 
         Writer::embed_watermark(
             &mut coefficients,

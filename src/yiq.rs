@@ -188,20 +188,7 @@ impl From<&YIQ32FImage> for image::Rgb32FImage {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn approx_equal(a: &[f32], b: &[f32], max_error: f32) {
-        if a.len() != b.len() {
-            assert!(false, "a and b are not equal length");
-        }
-        for delta in a.iter().zip(b.iter()).map(|(av, bv)| (av - bv).abs()) {
-            if delta > max_error {
-                assert!(
-                    false,
-                    "a: {a:?}, b: {b:?}, delta was {delta}, this exceeded allowed {max_error}."
-                );
-            }
-        }
-    }
+    use crate::util::approx_equal;
 
     #[test]
     fn test_yiq_to_rgb() {

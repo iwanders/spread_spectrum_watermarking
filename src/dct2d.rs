@@ -177,25 +177,7 @@ mod tests {
     use super::*;
     use rustdct::DctPlanner;
 
-    fn approx_equal<T: DctNum + std::cmp::PartialOrd + std::fmt::Display>(
-        a: &[T],
-        b: &[T],
-        max_error: T,
-    ) where
-        T: std::ops::Sub<T>,
-    {
-        if a.len() != b.len() {
-            assert!(false, "a and b are not equal length");
-        }
-        for delta in a.iter().zip(b.iter()).map(|(av, bv)| (*av - *bv).abs()) {
-            if delta > max_error {
-                assert!(
-                    false,
-                    "a: {a:?}, b: {b:?}, delta was {delta}, this exceeded allowed {max_error}."
-                );
-            }
-        }
-    }
+    use crate::util::approx_equal;
 
     #[test]
     fn test_simple_dct_against_scipy() {

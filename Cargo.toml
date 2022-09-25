@@ -12,4 +12,4 @@ rand = "0.8.5"
 rand_distr = "0.4.3"
 
 [dev-dependencies]
-rand_xoshiro = "0.6.0"
+rand_chacha = "0.3.1"

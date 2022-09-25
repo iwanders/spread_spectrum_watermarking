@@ -57,6 +57,30 @@ pub type ExtractFunction = Box<
     ) -> f32,
 >;
 
+/// Function used to order the coefficients in the Y component of the dct.
+///
+/// Arguments:
+/// * `left_index`: The index of the left coefficient in the comparison.
+/// * `left_coefficient`: Value of the left coefficient in the original image.
+/// * `right_index`: The index of the right coefficient in the comparison.
+/// * `right_coefficient`: Value of the right coefficient in the original image.
+///
+/// Return: True if left should be sorted in front of right.
+pub type OrderingFunction = Box<dyn Fn(
+        /* left_index */ usize,
+        /* left_coefficient */ f32,
+        /* right_index */ usize,
+        /* right_coefficient */ f32,
+    ) -> std::cmp::Ordering,
+>;
+// Should this instead just be a `&[f32] -> Vec<usize>`, would that be easier to work with?
+
+/// Ordering method for coefficients to determine which ones are to be modulated.
+pub enum OrderingMethod {
+    Energy,
+    Custom(OrderingFunction),
+}
+
 /// Insertion method for the watermark.
 pub enum Insertion {
     /// Option 2 from the paper; x_i' = x_i (1 + alpha * w_i),  alpha as specified.
@@ -67,7 +91,8 @@ pub enum Insertion {
 
 /// Configuration to embed watermark with.
 pub struct WriteConfig {
-    insertion: Insertion,
+    pub insertion: Insertion,
+    pub ordering: OrderingMethod,
 }
 
 impl Default for WriteConfig {
@@ -75,6 +100,7 @@ impl Default for WriteConfig {
     fn default() -> Self {
         WriteConfig {
             insertion: Insertion::Option2(0.1),
+            ordering: OrderingMethod::Energy,
         }
     }
 }
@@ -89,7 +115,8 @@ pub enum Extraction {
 
 /// Configuration to extract watermark with.
 pub struct ReadConfig {
-    extraction: Extraction,
+    pub extraction: Extraction,
+    pub ordering: OrderingMethod,
 }
 
 impl Default for ReadConfig {
@@ -97,9 +124,38 @@ impl Default for ReadConfig {
     fn default() -> Self {
         ReadConfig {
             extraction: Extraction::Option2(0.1),
+            ordering: OrderingMethod::Energy,
         }
     }
 }
+
+
+/// Obtain a sorted vector of indices based on the energy.
+#[allow(dead_code)]
+fn obtain_indices_by_energy(coefficients: &[f32]) -> Vec<usize> {
+    obtain_indices_by_function(coefficients, Box::new(ordering_by_energy))
+}
+
+/// Obtain index order (skipping the first) for a series of coefficients.
+fn obtain_indices_by_function(coefficients: &[f32], ordering_function: OrderingFunction) -> Vec<usize> {
+    let mut coeff_abs_index = coefficients
+        .iter()
+        .enumerate()
+        .skip(1)
+        .collect::<Vec<_>>();
+    coeff_abs_index.sort_by(|a, b| ordering_function(b.0, *b.1, a.0, *a.1));
+    coeff_abs_index
+        .iter()
+        .map(|(index, _coeff)| *index)
+        .collect()
+}
+
+/// Energy in a DCT is the amplitude squared. This skips the zeroth coefficient as that is the DC
+/// gain.
+fn ordering_by_energy(_left: usize, left: f32, _right_index: usize, right: f32) -> std::cmp::Ordering {
+    (left * left).total_cmp(&(right * right))
+}
+
 
 // The Reader and Writer have some code duplication, this can be factored out, but it doesn't make
 // the code or algorithm more readable, so for now I chose not to do so.
@@ -119,6 +175,12 @@ impl Writer {
             Insertion::Option2(scaling) => Writer::make_insert_function_2(scaling),
             Insertion::Custom(v) => v,
         };
+
+        let ordering_function = match config.ordering {
+            OrderingMethod::Energy => Box::new(ordering_by_energy),
+            OrderingMethod::Custom(v) => v,
+        };
+
         let mut v = Writer {
             image: (&image.into_rgb32f()).into(), // convert to YIQ color space
             planner: DctPlanner::<f32>::new(),
@@ -126,7 +188,7 @@ impl Writer {
             insert_function,
         };
         v.perform_dct(); // perform DCT on Y channel.
-        v.update_indices(); // determine the coefficient order.
+        v.update_indices(ordering_function); // determine the coefficient order.
         v
     }
 
@@ -136,9 +198,9 @@ impl Writer {
     }
 
     /// Function that determines which indices should be operated on.
-    fn update_indices(&mut self) {
+    fn update_indices(&mut self, ordering_function: OrderingFunction) {
         let coefficients = &self.image.y().as_flat_samples().samples;
-        self.indices = obtain_indices_by_energy(coefficients);
+        self.indices = obtain_indices_by_function(coefficients, ordering_function);
     }
 
     /// Perform the DCT on the Y channel.
@@ -281,8 +343,12 @@ impl Reader {
                 Extraction::Option2(scaling) => Reader::make_extract_function_2(scaling),
                 Extraction::Custom(v) => v,
             };
+            let ordering_function = match config.ordering {
+                OrderingMethod::Energy => Box::new(ordering_by_energy),
+                OrderingMethod::Custom(v) => v,
+            };
             let coefficients = &v.image.y().as_flat_samples().samples;
-            let indices = obtain_indices_by_energy(coefficients);
+            let indices = obtain_indices_by_function(coefficients, ordering_function);
             v.base = Some(ReaderBase {
                 indices,
                 extract_function,
@@ -425,24 +491,6 @@ where
     fn data(&self) -> &[f32] {
         self.as_ref()
     }
-}
-
-/// Obtain a sorted vector of indices based on the energy.
-///
-/// Energy in a DCT is the amplitude squared. This skips the zeroth coefficient as that is the DC
-/// gain.
-fn obtain_indices_by_energy(coefficients: &[f32]) -> Vec<usize> {
-    let mut coeff_abs_index = coefficients
-        .iter()
-        .enumerate()
-        .skip(1)
-        .map(|(index, coeff)| (coeff * coeff, index))
-        .collect::<Vec<_>>();
-    coeff_abs_index.sort_by(|a, b| b.0.total_cmp(&a.0));
-    coeff_abs_index
-        .iter()
-        .map(|(_coeff, index)| *index)
-        .collect()
 }
 
 /// Representation of calculated similarity.

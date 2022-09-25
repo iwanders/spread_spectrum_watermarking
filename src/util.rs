@@ -29,14 +29,13 @@ pub fn approx_equal<T: rustdct::DctNum + std::cmp::PartialOrd + std::fmt::Displa
     T: std::ops::Sub<T>,
 {
     if a.len() != b.len() {
-        assert!(false, "a and b are not equal length");
+        panic!("a and b are not equal length");
     }
 
     for (i, (av, bv)) in a.iter().zip(b.iter()).enumerate() {
         let delta = (*av - *bv).abs();
         if delta > max_error {
-            assert!(
-                false,
+            panic!(
                 "a: {a:?}, b: {b:?}, (a[{i}]: {av:?}, b[{i}]: {bv:?}), delta was {delta}, this exceeded allowed {max_error}."
             );
         }

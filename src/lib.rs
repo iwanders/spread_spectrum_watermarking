@@ -25,11 +25,11 @@
 //! // Load the image from disk.
 //! let orig_image = image::open("tests/porcelain_cat_grey_background.jpg").unwrap();
 //!
-//! // Generate a new watermark. This should be stored somewhere, such that you can check whether it
-//! // is present in an image. The recommended watermark is sampled from a normal distribution, the
-//! // paper always uses a length of 1000 for their tests.
+//! // Generate a new watermark. This should be stored somewhere, such that you can check whether
+//! // it is present in an image. The recommended watermark is sampled from a normal distribution,
+//! // the paper always uses a length of 1000 for their tests.
 //! let mark = wm::MarkBuf::generate_normal(1000);
-//! 
+//!
 //! // Write the watermark to the image using default configuration, alpha = 0.1.
 //! let config = wm::WriteConfig::default();
 //! let watermarker = wm::Writer::new(orig_image, config);
@@ -51,14 +51,14 @@
 //! let read_config = wm::ReadConfig::default();
 //! let reader = wm::Reader::base(orig_image, read_config);
 //! let derived = wm::Reader::derived(watermarked_image);
-//! 
+//!
 //! // Extract the watermark of length 1000.
 //! let mut extracted_mark = vec![0f32; 1000];
 //! reader.extract(&derived, &mut extracted_mark);
 //!
 //! let mark_to_check_for = [0f32; 1000]; // Should load a real watermark from a database, stored
 //!                                       // when it was embedded into an image.
-//! 
+//!
 //! // Test create a tester for the watermark and query the similarity.
 //! let tester = wm::Tester::new(&extracted_mark);
 //! let embedded_sim = tester.similarity(&mark_to_check_for);
@@ -75,10 +75,10 @@ pub mod yiq;
 // expose the trait in the prelude.
 /// Exposes the [`crate::algorithm::Mark`] trait.
 pub mod prelude {
-    pub use crate::algorithm::{Mark};
+    pub use crate::algorithm::Mark;
 }
 // Export the public components from the algorithm here.
-pub use algorithm::{Reader, ReadConfig}; 
-pub use algorithm::{Writer, WriteConfig};
-pub use algorithm::{Tester};
-pub use algorithm::{MarkBuf};
+pub use algorithm::MarkBuf;
+pub use algorithm::Tester;
+pub use algorithm::{ReadConfig, Reader};
+pub use algorithm::{WriteConfig, Writer};

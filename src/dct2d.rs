@@ -124,10 +124,10 @@ pub fn dct2_2d<T: DctNum + std::ops::Mul>(
                 for row in 0..height {
                     // Copy the row into tmp.
                     let row_iter = data.iter().skip(row * width).step_by(1).take(width);
-                    let _ = row_iter
+                    row_iter
                         .zip(tmp.iter_mut())
                         .map(|(orig, out)| *out = *orig)
-                        .collect::<()>();
+                        .for_each(drop);
 
                     // Perform dct on the row.
                     // println!("Row: {row} -> tmp: {tmp:?}");
@@ -140,20 +140,20 @@ pub fn dct2_2d<T: DctNum + std::ops::Mul>(
                     // Copy tmp back into the data, overwriting the original input.
                     // Do note we apply scaling by a factor of two here.
                     let row_iter_mut = data.iter_mut().skip(row * width).step_by(1).take(width);
-                    let _ = row_iter_mut
+                    row_iter_mut
                         .zip(tmp.iter())
                         .map(|(data_dct, result)| *data_dct = scaling * *result)
-                        .collect::<()>();
+                        .for_each(drop);
                 }
             }
 
             Direction::Column => {
                 for column in 0..width {
                     let col_iter = data.iter().skip(column).step_by(width).take(height);
-                    let _ = col_iter
+                    col_iter
                         .zip(tmp.iter_mut())
                         .map(|(orig, out)| *out = *orig)
-                        .collect::<()>();
+                        .for_each(drop);
                     // println!("column: {column} -> tmp: {tmp:?}");
                     match transform_type {
                         Type::DCT2 => dct.process_dct2_with_scratch(&mut tmp, &mut scratch),
@@ -161,10 +161,10 @@ pub fn dct2_2d<T: DctNum + std::ops::Mul>(
                     }
                     // Do note we apply scaling by a factor of two here.
                     let col_iter_mut = data.iter_mut().skip(column).step_by(width).take(height);
-                    let _ = col_iter_mut
+                    col_iter_mut
                         .zip(tmp.iter())
                         .map(|(data_dct, result)| *data_dct = scaling * *result)
-                        .collect::<()>();
+                        .for_each(drop);
                 }
             }
         }
@@ -175,7 +175,7 @@ pub fn dct2_2d<T: DctNum + std::ops::Mul>(
         Type::DCT3 => {
             // Multiply by the correction factor.
             let scaling = T::from_usize(4).unwrap() / T::from_usize(width * height).unwrap();
-            let _ = data.iter_mut().map(|z| *z = *z * scaling).collect::<()>();
+            data.iter_mut().map(|z| *z = *z * scaling).for_each(drop);
         }
     };
 }

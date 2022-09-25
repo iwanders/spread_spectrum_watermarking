@@ -49,7 +49,8 @@ pub type ExtractFunction = Box<
 /// * `right_coefficient`: Value of the right coefficient in the original image.
 ///
 /// Return: True if left should be sorted in front of right.
-pub type OrderingFunction = Box<dyn Fn(
+pub type OrderingFunction = Box<
+    dyn Fn(
         /* left_index */ usize,
         /* left_coefficient */ f32,
         /* right_index */ usize,
@@ -112,7 +113,6 @@ impl Default for ReadConfig {
     }
 }
 
-
 /// Obtain a sorted vector of indices based on the energy.
 #[allow(dead_code)]
 fn obtain_indices_by_energy(coefficients: &[f32]) -> Vec<usize> {
@@ -120,12 +120,11 @@ fn obtain_indices_by_energy(coefficients: &[f32]) -> Vec<usize> {
 }
 
 /// Obtain index order (skipping the first) for a series of coefficients.
-fn obtain_indices_by_function(coefficients: &[f32], ordering_function: OrderingFunction) -> Vec<usize> {
-    let mut coeff_abs_index = coefficients
-        .iter()
-        .enumerate()
-        .skip(1)
-        .collect::<Vec<_>>();
+fn obtain_indices_by_function(
+    coefficients: &[f32],
+    ordering_function: OrderingFunction,
+) -> Vec<usize> {
+    let mut coeff_abs_index = coefficients.iter().enumerate().skip(1).collect::<Vec<_>>();
     coeff_abs_index.sort_by(|a, b| ordering_function(b.0, *b.1, a.0, *a.1));
     coeff_abs_index
         .iter()
@@ -135,10 +134,14 @@ fn obtain_indices_by_function(coefficients: &[f32], ordering_function: OrderingF
 
 /// Energy in a DCT is the amplitude squared. This skips the zeroth coefficient as that is the DC
 /// gain.
-fn ordering_by_energy(_left: usize, left: f32, _right_index: usize, right: f32) -> std::cmp::Ordering {
+fn ordering_by_energy(
+    _left: usize,
+    left: f32,
+    _right_index: usize,
+    right: f32,
+) -> std::cmp::Ordering {
     (left * left).total_cmp(&(right * right))
 }
-
 
 // The Reader and Writer have some code duplication, this can be factored out, but it doesn't make
 // the code or algorithm more readable, so for now I chose not to do so.
@@ -421,7 +424,7 @@ pub trait Mark {
 /// The paper recommends using a 0 mean sigma^2 = 1 standard distribution to determine the sequence
 /// to be embedded.
 /// See paper section IV-D as to why using a binary signal is vulnerable to multi document attacks.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct MarkBuf {
     data: Vec<f32>,
 }

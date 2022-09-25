@@ -1,5 +1,5 @@
-use std::path::PathBuf;
 use spread_spectrum_watermarking as wm;
+use std::path::PathBuf;
 
 fn do_thing(image_path: &PathBuf) {
     let orig_image = image::open(&image_path)
@@ -36,7 +36,6 @@ fn do_thing(image_path: &PathBuf) {
     println!("sim: {sim:?}");
     println!("exceeds 6 sigma: {}", sim.exceeds_sigma(6.0));
 }
-
 
 fn main() {
     if std::env::args().len() <= 1 {

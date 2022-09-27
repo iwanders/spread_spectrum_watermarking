@@ -1,16 +1,7 @@
 use spread_spectrum_watermarking as wm;
 use std::path::PathBuf;
-
-use rand_chacha::ChaCha8Rng;
-
-fn generate_fixed_normal_sequence(seed: u64, length: usize) -> Vec<f32> {
-    use rand::prelude::*;
-    use rand_distr::StandardNormal;
-    let mut generator = ChaCha8Rng::seed_from_u64(seed);
-    let mut data = Vec::with_capacity(length);
-    data.resize_with(length, || generator.sample(StandardNormal));
-    data
-}
+mod util;
+use util::generate_fixed_normal_sequence;
 
 #[test]
 fn embed_extract_test() {
@@ -23,7 +14,7 @@ fn embed_extract_test() {
     let orig_base = orig_image.clone();
 
     // Create a (fixed) watermark to embed.
-    let embedded_mark = generate_fixed_normal_sequence(0xaabb, 1000);
+    let embedded_mark = generate_fixed_normal_sequence(1, 1000);
     // println!("embedded_mark: {embedded_mark:?}");
 
     // Write the watermark.
@@ -33,6 +24,18 @@ fn embed_extract_test() {
 
     // Quantize the image back into a standard 8 bit per channel image.
     let img_back_to_rgb = image::DynamicImage::ImageRgb8(res.into_rgb8());
+
+    // This image is written once with:
+    // img_back_to_rgb.save("tests/watermarked_with_1.png").unwrap();
+    // Open that file and check if each pixel is identical.
+    let expected = image::open("tests/watermarked_with_1.png")
+        .unwrap()
+        .into_rgb8();
+    assert!(img_back_to_rgb
+        .clone()
+        .into_rgb8()
+        .pixels()
+        .eq(expected.pixels()));
 
     // Create the reader for the watermark.
     let read_config = wm::ReadConfig::default();

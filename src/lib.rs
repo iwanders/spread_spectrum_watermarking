@@ -45,7 +45,7 @@
 //! use spread_spectrum_watermarking as wm;
 //! // Load the original image, this is necessary to extract the watermark.
 //! let orig_image = image::open("tests/porcelain_cat_grey_background.jpg").unwrap();
-//! let watermarked_image = image::open("/tmp/watermarked.png").unwrap();
+//! let watermarked_image = image::open("tests/watermarked_with_1.png").unwrap();
 //!
 //! // Create the reader for the watermark using default configuration.
 //! let read_config = wm::ReadConfig::default();

@@ -1,4 +1,5 @@
 use spread_spectrum_watermarking as wm;
+use wm::prelude::*;
 use std::path::PathBuf;
 
 fn do_thing(image_path: &PathBuf) {
@@ -7,13 +8,16 @@ fn do_thing(image_path: &PathBuf) {
 
     let orig_base = orig_image.clone();
 
-    let mark = wm::MarkBuf::generate_normal(1000);
-    let mark_data = mark.data().to_vec();
-    println!("Mark: {mark:?}");
+    let count = 1;
+    let mut marks: Vec<_> = vec![];
+    let mark_length = 1000;
+    for _i in 0..count {
+        marks.push(wm::MarkBuf::generate_normal(mark_length));
+    }
 
     let config = wm::WriteConfig::default();
     let watermarker = wm::Writer::new(orig_image, config);
-    let res = watermarker.mark(&[&mark]);
+    let res = watermarker.mark(&marks.iter().map(|x| {x as &dyn Mark}).collect::<Vec<_>>());
 
     let image_derived = res.clone();
 
@@ -26,15 +30,22 @@ fn do_thing(image_path: &PathBuf) {
     let reader = wm::Reader::base(orig_base, read_config);
     let derived = wm::Reader::derived(image_derived);
 
-    let mut extracted_mark = vec![0f32; mark_data.len()];
+    let mut extracted_mark = vec![0f32; mark_length];
     reader.extract(&derived, &mut extracted_mark);
 
     let tester = wm::Tester::new(&extracted_mark);
-    let sim = tester.similarity(&mark_data);
 
-    println!("extracted: {extracted_mark:#?}");
-    println!("sim: {sim:?}");
-    println!("exceeds 6 sigma: {}", sim.exceeds_sigma(6.0));
+    let mut total_similarity = 0f32;
+    for mark in marks.iter() {
+        let sim = tester.similarity(&mark);
+        // println!("extracted: {extracted_mark:#?}");
+        println!("sim: {sim:?}");
+        println!("exceeds 6 sigma: {}", sim.exceeds_sigma(6.0));
+        total_similarity += sim.similarity;
+    }
+    println!("avg: {}", total_similarity / (marks.len() as f32));
+
+
 }
 
 fn main() {

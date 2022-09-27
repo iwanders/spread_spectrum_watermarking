@@ -249,7 +249,11 @@ impl Writer {
         watermarks: &[&dyn Mark],
     ) {
         // Actually modulate the watermarks onto the coefficients.
-        // We want to always work against the original coefficients.
+        // We want to always work against the original coefficients, because +1, +1 -1 will be
+        // different than +1, -1, +1 on the same coeficient, since scaling would be multiplicative.
+        // Tested this, it is statistically significant; embedding 100 watermarks of N=1000, with
+        // N(0, 1), we drop from an average similarity of 3.1 down to 2.4 if we were to do the
+        // naive embedding.
         if watermarks.len() == 1 {
             // Easy case, we can deal without copying the original coefficients.
             for (index, watermark) in indices.iter().zip(watermarks[0].data()) {
@@ -472,6 +476,12 @@ impl Mark for MarkBuf {
     }
 }
 
+impl Mark for &MarkBuf {
+    fn data(&self) -> &[f32] {
+        &self.data
+    }
+}
+
 impl<T: AsRef<[f32]>> Mark for T
 where
     T: AsRef<[f32]>,
@@ -509,15 +519,15 @@ impl<'a> Tester<'a> {
     }
 
     /// Compute the similarity between the extracted and provided watermark.
-    pub fn similarity(&self, comparison_watermark: &[f32]) -> Similarity {
-        assert_eq!(self.extracted_watermark.len(), comparison_watermark.len());
+    pub fn similarity(&self, comparison_watermark: &dyn Mark) -> Similarity {
+        assert_eq!(self.extracted_watermark.len(), comparison_watermark.data().len());
         // extracted is X*
         let mut nominator = 0.0;
         let mut denominator = 0.0;
         for (extracted, comparison) in self
             .extracted_watermark
             .iter()
-            .zip(comparison_watermark.iter())
+            .zip(comparison_watermark.data().iter())
         {
             nominator += extracted * comparison;
             denominator += extracted * extracted;

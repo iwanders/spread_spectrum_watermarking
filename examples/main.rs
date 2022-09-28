@@ -2,6 +2,77 @@ use spread_spectrum_watermarking as wm;
 use wm::prelude::*;
 use std::path::PathBuf;
 
+use clap::{Parser, Subcommand, Args};
+
+#[derive(Parser)]
+#[clap(author, version, about, long_about = None)]
+struct Cli {
+    #[clap(subcommand)]
+    command: Option<Commands>,
+}
+
+// #[derive(Args)]
+// struct Config {
+    // #[clap(action)]
+    // thing: String,
+// }
+
+
+
+#[derive(Args)]
+struct Embed {
+    /// The file to operate on.
+    #[clap(action)]
+    file: String,
+
+    /// Watermark length.
+    #[clap(default_value_t = 1000, value_parser)]
+    watermark_length: usize,
+
+    // #[clap()]
+    // z: Config,
+}
+
+
+
+#[derive(Subcommand)]
+enum Commands {
+    /// Embed a watermark into a file.
+    Embed(Embed),
+}
+
+
+/*
+
+Simple interface:
+main watermark <file>
+    * description; watermark description: metadata stored in json file.
+    * length; 1000 default.
+    * alpha; 0.1 default.
+    
+    writes: <file>_watermarked.ext
+    writes: <file>_watermark.json
+
+    * conditional flag to overwrite.
+    * How do we handle the extension?
+
+Bulk interface;
+main embed <file> [watermark.json, ...]
+
+main test <base_file> <derived_file> [watermarks_to_check_against.json, ...]
+
+main extract <base_file> <derived_file>
+
+watermark.json must hold:
+    WriteConfig
+    ReadConfig counterpart.
+    length
+    alpha
+    Lets also store the non-blindness, what way if we implement blind watermarking... we can accomodate.s
+
+
+*/
+
 fn do_thing(image_path: &PathBuf) {
     let orig_image = image::open(&image_path)
         .unwrap_or_else(|_| panic!("could not load image at {:?}", image_path));
@@ -49,13 +120,19 @@ fn do_thing(image_path: &PathBuf) {
 }
 
 fn main() {
-    if std::env::args().len() <= 1 {
-        println!("expected one argument fo an image file.");
-        std::process::exit(1);
+    let cli = Cli::parse();
+
+
+    // You can check for the existence of subcommands, and if found use their
+    // matches just as you would the top level cmd
+    match &cli.command {
+        Some(Commands::Embed ( v )) => {
+            let image_path = PathBuf::from(&v.file);
+
+            do_thing(&image_path);
+            
+        }
+        None => {}
     }
 
-    let input_image_file = std::env::args().nth(1).expect("no image file specified");
-    let image_path = PathBuf::from(&input_image_file);
-
-    do_thing(&image_path);
 }

@@ -520,7 +520,10 @@ impl<'a> Tester<'a> {
 
     /// Compute the similarity between the extracted and provided watermark.
     pub fn similarity(&self, comparison_watermark: &dyn Mark) -> Similarity {
-        assert_eq!(self.extracted_watermark.len(), comparison_watermark.data().len());
+        assert_eq!(
+            self.extracted_watermark.len(),
+            comparison_watermark.data().len()
+        );
         // extracted is X*
         let mut nominator = 0.0;
         let mut denominator = 0.0;

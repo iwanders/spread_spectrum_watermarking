@@ -1,8 +1,8 @@
 use spread_spectrum_watermarking as wm;
-use wm::prelude::*;
 use std::path::PathBuf;
+use wm::prelude::*;
 
-use clap::{Parser, Subcommand, Args};
+use clap::{Args, Parser, Subcommand};
 
 #[derive(Parser)]
 #[clap(author, version, about, long_about = None)]
@@ -13,11 +13,9 @@ struct Cli {
 
 // #[derive(Args)]
 // struct Config {
-    // #[clap(action)]
-    // thing: String,
+// #[clap(action)]
+// thing: String,
 // }
-
-
 
 #[derive(Args)]
 struct Embed {
@@ -28,19 +26,15 @@ struct Embed {
     /// Watermark length.
     #[clap(default_value_t = 1000, value_parser)]
     watermark_length: usize,
-
     // #[clap()]
     // z: Config,
 }
-
-
 
 #[derive(Subcommand)]
 enum Commands {
     /// Embed a watermark into a file.
     Embed(Embed),
 }
-
 
 /*
 
@@ -49,7 +43,7 @@ main watermark <file>
     * description; watermark description: metadata stored in json file.
     * length; 1000 default.
     * alpha; 0.1 default.
-    
+
     writes: <file>_watermarked.ext
     writes: <file>_watermark.json
 
@@ -88,7 +82,7 @@ fn do_thing(image_path: &PathBuf) {
 
     let config = wm::WriteConfig::default();
     let watermarker = wm::Writer::new(orig_image, config);
-    let res = watermarker.mark(&marks.iter().map(|x| {x as &dyn Mark}).collect::<Vec<_>>());
+    let res = watermarker.mark(&marks.iter().map(|x| x as &dyn Mark).collect::<Vec<_>>());
 
     let image_derived = res.clone();
 
@@ -115,24 +109,19 @@ fn do_thing(image_path: &PathBuf) {
         total_similarity += sim.similarity;
     }
     println!("avg: {}", total_similarity / (marks.len() as f32));
-
-
 }
 
 fn main() {
     let cli = Cli::parse();
 
-
     // You can check for the existence of subcommands, and if found use their
     // matches just as you would the top level cmd
     match &cli.command {
-        Some(Commands::Embed ( v )) => {
+        Some(Commands::Embed(v)) => {
             let image_path = PathBuf::from(&v.file);
 
             do_thing(&image_path);
-            
         }
         None => {}
     }
-
 }

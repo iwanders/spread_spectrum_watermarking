@@ -82,3 +82,4 @@ pub use algorithm::MarkBuf;
 pub use algorithm::Tester;
 pub use algorithm::{ReadConfig, Reader};
 pub use algorithm::{WriteConfig, Writer};
+pub use algorithm::{OrderingMethod, Insertion, Extraction};

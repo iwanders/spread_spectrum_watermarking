@@ -80,6 +80,6 @@ pub mod prelude {
 // Export the public components from the algorithm here.
 pub use algorithm::MarkBuf;
 pub use algorithm::Tester;
+pub use algorithm::{Extraction, Insertion, OrderingMethod};
 pub use algorithm::{ReadConfig, Reader};
 pub use algorithm::{WriteConfig, Writer};
-pub use algorithm::{OrderingMethod, Insertion, Extraction};

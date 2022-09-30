@@ -136,52 +136,63 @@ fn do_thing(image_path: &PathBuf, watermark_strength: f32) {
 }
 
 fn legacy(base_image_path: &PathBuf, derived_image_path: &PathBuf, watermark_length: usize) {
+    let base_image = image::open(&base_image_path)
+        .unwrap_or_else(|_| panic!("could not load image at {:?}", base_image_path));
+    let derived_image = image::open(&derived_image_path)
+        .unwrap_or_else(|_| panic!("could not load image at {:?}", derived_image_path));
 
-    // Legacy sorting... was naive :(
-    fn legacy_ordering(
-        _left: usize,
-        left: f32,
-        _right_index: usize,
-        right: f32,
-    ) -> std::cmp::Ordering {
+
+    // Scaling here needs to account for the 'ortho' aspect of the python dct.
+    let w = base_image.width() as usize;
+    let h = base_image.height() as usize;
+
+    let ortho_scaling = move | index: usize, value: f32 | -> f32 {
+        let n = w * h;
+        // Scaling for k = 0 in scipy.fftpack.dct ortho scaling.
+        let s_k0 = (1.0 / (4.0 * n as f32)).sqrt();
+
+        // Scaling for all other coefficients
+        let s = (1.0 / (2.0 * n as f32)).sqrt();
+
+        // If on first row, it is a k=0 index. Or if on first column, it is also a zero index.
+        return if index < w || (index % w) == 0 {
+            s_k0 * value
+        } else {
+            s * value
+        }
+    };
+
+    let legacy_ordering = move |left_index: usize,
+                                mut left: f32,
+                                right_index: usize,
+                                mut right: f32|
+          -> std::cmp::Ordering {
+        left = ortho_scaling(left_index, left);
+        right = ortho_scaling(right_index, right);
         (left).total_cmp(&(right))
-    }
-
-
-    let base_image = image::open(&base_image_path).unwrap_or_else(|_| panic!("could not load image at {:?}", base_image_path));
-    let derived_image = image::open(&derived_image_path).unwrap_or_else(|_| panic!("could not load image at {:?}", derived_image_path));
+    };
 
     let mut config = wm::ReadConfig::default();
 
     config.ordering = wm::OrderingMethod::Custom(Box::new(legacy_ordering));
     let reader = wm::Reader::base(base_image, config);
+
+    const DISPLAY: usize = 1000;
+    let indices = &reader.indices()[0..DISPLAY];
+    println!("Reader indices: {indices:?}");
+    let coefficients_by_index: Vec<f32> = indices
+        .iter()
+        .map(|i| reader.coefficients()[*i])
+        .collect::<_>();
+    let coefficients_by_index = &coefficients_by_index[0..DISPLAY];
+    println!("Reader coefficients_by_index: {coefficients_by_index:?}");
     let derived = wm::Reader::derived(derived_image);
 
     let mut extracted_mark = vec![0f32; watermark_length + 1];
     reader.extract(&derived, &mut extracted_mark);
-    println!("Extracted: {extracted_mark:#?}");
-    /*
-    
-     Something is off.
- "wm": [
-  0.5703125, 
-  -0.921875,   -0.9219506,
-  0.8671875,   0.8665143,
-  -0.890625,   0.5698704,
-  0.25,        0.7575961,
-  -0.6796875,  -0.8903251,
-  0.7578125,   0.25039995,
-  -0.859375,   -0.6797979,
-  0.78125,     -0.8571038,
-  -0.7890625,   -0.5718183,
-  0.890625,    0.780544,
-  -0.8984375,  -0.7874676,
-  -0.5703125,   0.8916502,
-  0.921875,    0.88832414,
-  -0.8671875,   -0.89786536,
-  0.890625, 
-  -0.25, 
-    */
+    let extracted_display = &extracted_mark[0..DISPLAY];
+    println!("Extracted: {extracted_display:?}");
+
 }
 
 fn main() {

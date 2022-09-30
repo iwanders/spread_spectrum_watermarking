@@ -347,8 +347,12 @@ impl Reader {
         v
     }
 
-    fn coefficients(&self) -> &[f32] {
+    pub fn coefficients(&self) -> &[f32] {
         self.image.y().as_flat_samples().samples
+    }
+
+    pub fn indices(&self) -> &[usize] {
+        &self.base.as_ref().unwrap().indices
     }
 
     /// Perform the DCT on the Y channel.

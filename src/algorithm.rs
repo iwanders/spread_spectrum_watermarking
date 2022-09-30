@@ -112,7 +112,6 @@ impl Default for ReadConfig {
     }
 }
 
-
 /// Ordering method for coefficients to determine which ones are to be modulated.
 pub enum OrderingMethod {
     /// Sort by energy, taking the coefficient squared.
@@ -130,8 +129,16 @@ impl OrderingMethod {
     pub fn function(self, width: usize, height: usize) -> OrderingFunction {
         match self {
             OrderingMethod::Energy => Box::new(ordering_by_energy),
-            OrderingMethod::EnergyOrthogonal => Box::new(ordering_orthogonal(Box::new(ordering_by_energy), width, height)),
-            OrderingMethod::Legacy => Box::new(ordering_orthogonal(Box::new(ordering_by_largest), width, height)),
+            OrderingMethod::EnergyOrthogonal => Box::new(ordering_orthogonal(
+                Box::new(ordering_by_energy),
+                width,
+                height,
+            )),
+            OrderingMethod::Legacy => Box::new(ordering_orthogonal(
+                Box::new(ordering_by_largest),
+                width,
+                height,
+            )),
             OrderingMethod::Custom(v) => v,
         }
     }
@@ -179,9 +186,16 @@ fn ordering_by_largest(
 }
 
 // Scaling here needs to account for the 'ortho' aspect of the python dct.
-fn ordering_orthogonal(inner_compare: OrderingFunction, width: usize, height: usize) -> OrderingFunction {
+fn ordering_orthogonal(
+    inner_compare: OrderingFunction,
+    width: usize,
+    height: usize,
+) -> OrderingFunction {
     let ortho_scaling = move |index: usize, value: f32| -> f32 {
         let n = width * height;
+        // This k0 scaling should be applied twice on the dc gain of the image, but since we never
+        // use that anyway, we don't have to worry about that.
+
         // Scaling for k = 0 in scipy.fftpack.dct ortho scaling.
         let s_k0 = (1.0 / (4.0 * n as f32)).sqrt();
 
@@ -196,15 +210,17 @@ fn ordering_orthogonal(inner_compare: OrderingFunction, width: usize, height: us
         };
     };
 
-    Box::new(move |left_index: usize,
-                                mut left: f32,
-                                right_index: usize,
-                                mut right: f32|
-          -> std::cmp::Ordering {
-        left = ortho_scaling(left_index, left);
-        right = ortho_scaling(right_index, right);
-        inner_compare(left_index, left, right_index, right)
-    })
+    Box::new(
+        move |left_index: usize,
+              mut left: f32,
+              right_index: usize,
+              mut right: f32|
+              -> std::cmp::Ordering {
+            left = ortho_scaling(left_index, left);
+            right = ortho_scaling(right_index, right);
+            inner_compare(left_index, left, right_index, right)
+        },
+    )
 }
 
 // The Reader and Writer have some code duplication, this can be factored out, but it doesn't make
@@ -226,7 +242,9 @@ impl Writer {
             Insertion::Custom(v) => v,
         };
 
-        let ordering_function = config.ordering.function(image.width() as usize, image.height() as usize);
+        let ordering_function = config
+            .ordering
+            .function(image.width() as usize, image.height() as usize);
 
         let mut v = Writer {
             image: (&image.into_rgb32f()).into(), // convert to YIQ color space
@@ -394,7 +412,9 @@ impl Reader {
                 Extraction::Option2(scaling) => Reader::make_extract_function_2(scaling),
                 Extraction::Custom(v) => v,
             };
-            let ordering_function = config.ordering.function(v.image.width() as usize, v.image.height() as usize);
+            let ordering_function = config
+                .ordering
+                .function(v.image.width() as usize, v.image.height() as usize);
             let coefficients = &v.image.y().as_flat_samples().samples;
             let indices = obtain_indices_by_function(coefficients, ordering_function);
             v.base = Some(ReaderBase {

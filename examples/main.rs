@@ -141,12 +141,11 @@ fn legacy(base_image_path: &PathBuf, derived_image_path: &PathBuf, watermark_len
     let derived_image = image::open(&derived_image_path)
         .unwrap_or_else(|_| panic!("could not load image at {:?}", derived_image_path));
 
-
     // Scaling here needs to account for the 'ortho' aspect of the python dct.
     let w = base_image.width() as usize;
     let h = base_image.height() as usize;
 
-    let ortho_scaling = move | index: usize, value: f32 | -> f32 {
+    let ortho_scaling = move |index: usize, value: f32| -> f32 {
         let n = w * h;
         // Scaling for k = 0 in scipy.fftpack.dct ortho scaling.
         let s_k0 = (1.0 / (4.0 * n as f32)).sqrt();
@@ -159,7 +158,7 @@ fn legacy(base_image_path: &PathBuf, derived_image_path: &PathBuf, watermark_len
             s_k0 * value
         } else {
             s * value
-        }
+        };
     };
 
     let legacy_ordering = move |left_index: usize,
@@ -175,6 +174,7 @@ fn legacy(base_image_path: &PathBuf, derived_image_path: &PathBuf, watermark_len
     let mut config = wm::ReadConfig::default();
 
     config.ordering = wm::OrderingMethod::Custom(Box::new(legacy_ordering));
+    // config.ordering = wm::OrderingMethod::Energy;
     let reader = wm::Reader::base(base_image, config);
 
     const DISPLAY: usize = 1000;
@@ -192,7 +192,6 @@ fn legacy(base_image_path: &PathBuf, derived_image_path: &PathBuf, watermark_len
     reader.extract(&derived, &mut extracted_mark);
     let extracted_display = &extracted_mark[0..DISPLAY];
     println!("Extracted: {extracted_display:?}");
-
 }
 
 fn main() {

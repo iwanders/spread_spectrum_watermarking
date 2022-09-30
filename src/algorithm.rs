@@ -7,6 +7,11 @@
 //
 // [x] Denotes fixed in this implementation.
 
+// Food for thought;
+// Python implementation used orthonormal scaling, which decreases the scaling on the DC gains of
+// each DCT invocation. Should we do that in this implementation as well? The indices selected are
+// different, but how does this affect the functionality?
+
 use rustdct::DctPlanner;
 /// Function used to embed the watermark into coefficients.
 ///

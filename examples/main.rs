@@ -141,39 +141,9 @@ fn legacy(base_image_path: &PathBuf, derived_image_path: &PathBuf, watermark_len
     let derived_image = image::open(&derived_image_path)
         .unwrap_or_else(|_| panic!("could not load image at {:?}", derived_image_path));
 
-    // Scaling here needs to account for the 'ortho' aspect of the python dct.
-    let w = base_image.width() as usize;
-    let h = base_image.height() as usize;
-
-    let ortho_scaling = move |index: usize, value: f32| -> f32 {
-        let n = w * h;
-        // Scaling for k = 0 in scipy.fftpack.dct ortho scaling.
-        let s_k0 = (1.0 / (4.0 * n as f32)).sqrt();
-
-        // Scaling for all other coefficients
-        let s = (1.0 / (2.0 * n as f32)).sqrt();
-
-        // If on first row, it is a k=0 index. Or if on first column, it is also a zero index.
-        return if index < w || (index % w) == 0 {
-            s_k0 * value
-        } else {
-            s * value
-        };
-    };
-
-    let legacy_ordering = move |left_index: usize,
-                                mut left: f32,
-                                right_index: usize,
-                                mut right: f32|
-          -> std::cmp::Ordering {
-        left = ortho_scaling(left_index, left);
-        right = ortho_scaling(right_index, right);
-        (left).total_cmp(&(right))
-    };
-
     let mut config = wm::ReadConfig::default();
 
-    config.ordering = wm::OrderingMethod::Custom(Box::new(legacy_ordering));
+    config.ordering = wm::OrderingMethod::Legacy;
     // config.ordering = wm::OrderingMethod::Energy;
     let reader = wm::Reader::base(base_image, config);
 

@@ -64,12 +64,6 @@ pub type OrderingFunction = Box<
 >;
 // Should this instead just be a `&[f32] -> Vec<usize>`, would that be easier to work with?
 
-/// Ordering method for coefficients to determine which ones are to be modulated.
-pub enum OrderingMethod {
-    Energy,
-    Custom(OrderingFunction),
-}
-
 /// Insertion method for the watermark.
 pub enum Insertion {
     /// Option 2 from the paper; x_i' = x_i (1 + alpha * w_i),  alpha as specified.
@@ -118,6 +112,31 @@ impl Default for ReadConfig {
     }
 }
 
+
+/// Ordering method for coefficients to determine which ones are to be modulated.
+pub enum OrderingMethod {
+    /// Sort by energy, taking the coefficient squared.
+    Energy,
+    /// Sort by energy, but with the DCT scaled to be orthogonal.
+    EnergyOrthogonal,
+    /// Legacy sorting from the 2013 Python code.
+    Legacy,
+    /// Custom sorting function.
+    Custom(OrderingFunction),
+}
+
+impl OrderingMethod {
+    /// Convert the ordering method into an ordering function.
+    pub fn function(self, width: usize, height: usize) -> OrderingFunction {
+        match self {
+            OrderingMethod::Energy => Box::new(ordering_by_energy),
+            OrderingMethod::EnergyOrthogonal => Box::new(ordering_orthogonal(Box::new(ordering_by_energy), width, height)),
+            OrderingMethod::Legacy => Box::new(ordering_orthogonal(Box::new(ordering_by_largest), width, height)),
+            OrderingMethod::Custom(v) => v,
+        }
+    }
+}
+
 /// Obtain a sorted vector of indices based on the energy.
 #[allow(dead_code)]
 fn obtain_indices_by_energy(coefficients: &[f32]) -> Vec<usize> {
@@ -148,6 +167,46 @@ fn ordering_by_energy(
     (left * left).total_cmp(&(right * right))
 }
 
+/// In 2013 I made a mistake... I just sorted the container of coefficients, instead of taking a
+/// norm.
+fn ordering_by_largest(
+    _left: usize,
+    left: f32,
+    _right_index: usize,
+    right: f32,
+) -> std::cmp::Ordering {
+    (left).total_cmp(&(right))
+}
+
+// Scaling here needs to account for the 'ortho' aspect of the python dct.
+fn ordering_orthogonal(inner_compare: OrderingFunction, width: usize, height: usize) -> OrderingFunction {
+    let ortho_scaling = move |index: usize, value: f32| -> f32 {
+        let n = width * height;
+        // Scaling for k = 0 in scipy.fftpack.dct ortho scaling.
+        let s_k0 = (1.0 / (4.0 * n as f32)).sqrt();
+
+        // Scaling for all other coefficients
+        let s = (1.0 / (2.0 * n as f32)).sqrt();
+
+        // If on first row, it is a k=0 index. Or if on first column, it is also a zero index.
+        return if index < width || (index % width) == 0 {
+            s_k0 * value
+        } else {
+            s * value
+        };
+    };
+
+    Box::new(move |left_index: usize,
+                                mut left: f32,
+                                right_index: usize,
+                                mut right: f32|
+          -> std::cmp::Ordering {
+        left = ortho_scaling(left_index, left);
+        right = ortho_scaling(right_index, right);
+        inner_compare(left_index, left, right_index, right)
+    })
+}
+
 // The Reader and Writer have some code duplication, this can be factored out, but it doesn't make
 // the code or algorithm more readable, so for now I chose not to do so.
 
@@ -167,10 +226,7 @@ impl Writer {
             Insertion::Custom(v) => v,
         };
 
-        let ordering_function = match config.ordering {
-            OrderingMethod::Energy => Box::new(ordering_by_energy),
-            OrderingMethod::Custom(v) => v,
-        };
+        let ordering_function = config.ordering.function(image.width() as usize, image.height() as usize);
 
         let mut v = Writer {
             image: (&image.into_rgb32f()).into(), // convert to YIQ color space
@@ -338,10 +394,7 @@ impl Reader {
                 Extraction::Option2(scaling) => Reader::make_extract_function_2(scaling),
                 Extraction::Custom(v) => v,
             };
-            let ordering_function = match config.ordering {
-                OrderingMethod::Energy => Box::new(ordering_by_energy),
-                OrderingMethod::Custom(v) => v,
-            };
+            let ordering_function = config.ordering.function(v.image.width() as usize, v.image.height() as usize);
             let coefficients = &v.image.y().as_flat_samples().samples;
             let indices = obtain_indices_by_function(coefficients, ordering_function);
             v.base = Some(ReaderBase {

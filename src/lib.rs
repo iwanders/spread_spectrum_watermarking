@@ -17,7 +17,7 @@
 //!
 //!
 //! # Usage
-//! Also take a look at the examples and integration test besides the examples given here.
+//! Also take a look at the examples and integration test in addition to the examples given here.
 //!
 //! ## Embedding a watermark
 //! ```

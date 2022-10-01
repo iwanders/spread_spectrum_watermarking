@@ -43,17 +43,17 @@ To embed a watermark, the following steps are performed:
 1. Convert the RGB image to [YIQ](https://en.wikipedia.org/wiki/YIQ) color space.
 2. Compute the discrete consine transform on the Y channel.
 3. Sort the coefficients by energy, or another metric. In the diagram the coefficients are numbered 1-5 based on magnitude.
-4. Embed the watermark into the strongest coefficients, using equations of step 42 of the patent. The watermark is usually a sequence of floats sampled from a standard normal distribution. This sequence is modulated into the most significant coefficients of the original image. (Skipping the DC gain at index 0).
-- Perform the inverted discrete cosine transform using the updated coefficients obtained from embedding the watermark.
-- Convert image back from YIQ to RGB color space to obtain the watermarked image.
+4. Embed the watermark into the strongest coefficients, using equations of step 42 of the patent. The watermark is usually a sequence of floats sampled from a standard normal distribution. This sequence is modulated into the most significant coefficients of the original image. (Skipping the DC gain at index 0). In the diagram, we stems from the watermark's indices added to their coefficient counterparts from the original image.
+5. Perform the inverted discrete cosine transform using the updated coefficients obtained from embedding the watermark.
+6. Convert image back from YIQ to RGB color space to obtain the watermarked image.
 
 
 ## Extracting a watermark
 ![watermark_extraction.svg](./doc/watermark_extraction.svg)
 
 To extract a watermark, the following steps are performed:
-1. Perform step 1 to 3 of the embedding procedure using the original (non-watermarked) image.
-2. Perform step 1 and 2 of the embedding procedure using the watermarked image.
+1. Perform step 1 to 3 of the embedding procedure using the original (non-watermarked) image. Obtaining the coefficients from the original and numbered by significance.
+2. Perform step 1 and 2 of the embedding procedure using the watermarked image. Obtaining the coefficients from the watermarked image, ready to be indexed into.
 3. Using the coefficients - as sorted from the original values - and their counterparts from the watermarked image, we can extract the change present in the watermarked image. This is the retrieved watermark.
 
 ## Testing watermark similarity

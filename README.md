@@ -51,18 +51,14 @@ To embed a watermark, the following steps are performed:
 ## Extracting a watermark
 ![watermark_extraction.svg](./doc/watermark_extraction.svg)
 
-To extract a watermark, the following steps are performed:
+To extract and test for a watermark, the following steps are performed:
 1. Perform step 1 to 3 of the embedding procedure using the original (non-watermarked) image. Obtaining the coefficients from the original and numbered by significance.
 2. Perform step 1 and 2 of the embedding procedure using the watermarked image. Obtaining the coefficients from the watermarked image, ready to be indexed into.
-3. Using the coefficients - as sorted from the original values - and their counterparts from the watermarked image, we can extract the change present in the watermarked image. This is the retrieved watermark.
-
-## Testing watermark similarity
-
-The retrieved watermark $X^\star$ is never identical to the original watermark that was embedded $X$. A similarity score or correlation coefficient can then be computed. In the patent the following similarity score is used:
-
+3. Using the coefficients - as sorted from the original values - and their counterparts from the watermarked image, we can extract the change present in the watermarked image. This is the retrieved watermark $X^\star$.
+4. The retrieved watermark $X^\star$ is never identical to the original watermark that was embedded $X$. A similarity score or correlation coefficient can then be computed. In the patent the following similarity score is used:
 $$\text{sim}\left( X, X^\star \right) = \frac{X^\star\cdot X}{\sqrt{X^\star \cdot X^\star}}$$
-
 Which has the convenient properties that $\text{sim}\left(X, X^*\right)$ itself is distributed according to the normal distribution, which means that if this value exceeds several sigma's, it is very likely that the watermark was indeed detected.
+Note that once the watermark is extracted, it can be tested cheaply for similarity between any number of watermarks that are stored and have been used for watermarking in the past.
 
 # Usage
 Also take a look at the examples and integration test in addition to the the examples given here.

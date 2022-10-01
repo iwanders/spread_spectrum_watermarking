@@ -5,6 +5,8 @@ use util::generate_fixed_normal_sequence;
 
 #[test]
 fn embed_extract_test() {
+    // ================ Start of embedding section. ================
+
     // Load the image.
     let image_path = PathBuf::from("tests/porcelain_cat_grey_background.jpg");
 
@@ -27,6 +29,9 @@ fn embed_extract_test() {
 
     // This image is written once with:
     // img_back_to_rgb.save("tests/watermarked_with_1.png").unwrap();
+
+    // ================ End of embedding section. ================
+
     // Open that file and check if each pixel is identical.
     let expected = image::open("tests/watermarked_with_1.png")
         .unwrap()
@@ -37,6 +42,8 @@ fn embed_extract_test() {
         .pixels()
         .eq(expected.pixels()));
 
+    // ================ Start of extraction section. ================
+
     // Create the reader for the watermark.
     let read_config = wm::ReadConfig::default();
     let reader = wm::Reader::base(orig_base, read_config);
@@ -46,6 +53,8 @@ fn embed_extract_test() {
     let mut extracted_mark = vec![0f32; embedded_mark.len()];
     reader.extract(&derived, &mut extracted_mark);
     // println!("extracted_mark: {extracted_mark:?}");
+
+    // ================ End of extraction section. ================
 
     // Verify whether the extracted mark is almost similar to the inserted mark.
     // The threshold here is pretty high, there's a few coefficients that have significant error
@@ -60,12 +69,16 @@ fn embed_extract_test() {
         / (extracted_mark.len() as f32);
     assert!(avg_error < 0.02f32);
 
+    // ================ Start of testing section. ================
+
     // Test create a tester for the watermark and query the similarity.
     let tester = wm::Tester::new(&extracted_mark);
     let embedded_sim = tester.similarity(&embedded_mark);
 
     // Check if the similarity exceeds many sigma's, similarity is 31.24
     assert!(embedded_sim.exceeds_sigma(31.2));
+
+    // ================ End of testing section. ================
 
     // Create a new watermark, and calculate that similarity.
     let random_mark = generate_fixed_normal_sequence(0xBAAAAAAD, 1000);

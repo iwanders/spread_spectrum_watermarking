@@ -5,6 +5,23 @@ A crate to perform spread spectrum watermarking on images.
 This is a non-blind watermarking scheme that requires access to the original image to extract the watermark from a watermarked image.
 The watermark is encoded in the frequency domain, using the most significant coefficients that make up the image. This ensures that the watermark is robust and even persists when high frequency components are eliminated, as happens with blurring through compression or resizing.
 
+## An example
+
+To get an impression of how this looks, let us consider [this](https://commons.wikimedia.org/wiki/File:Japan,_Edo_Period_-_Sleeping_Cat-_Ko_Imari_Type_-_1964.255_-_Cleveland_Museum_of_Art.tif) public domain image of a cat figurine. This image is deliberately picked to make it relatively easy to observe the effects of the watermark.
+
+The orginal image has a smooth grey background:
+
+![porcelain_cat_grey_background.jpg](./tests/porcelain_cat_grey_background.jpg)
+
+After embedding a watermark (of length 1000, sampled from a standard normal distribution, embedding coefficient 0.1) the following result is obtained:
+
+![watermarked_with_1.png](./tests/watermarked_with_1.png)
+
+The background has become 'cloudy' but the image itself is still sharp and visually appealing. In images without smooth gradients or regions with a solid color it is very hard to see the presence of the watermark without access to the original.
+
+These example images are created with the [single_simple.rs](tests/single_simple.rs) test.
+
+
 ## Background
 
 This crate roughly follows the algorithm described in the following paper:

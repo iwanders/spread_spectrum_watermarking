@@ -4173,7 +4173,7 @@
      inkscape:pageopacity="0.0"
      inkscape:pageshadow="2"
      inkscape:zoom="0.11313709"
-     inkscape:cx="3344.79"
+     inkscape:cx="1828.9299"
      inkscape:cy="1076.5896"
      inkscape:document-units="mm"
      inkscape:current-layer="layer8"
@@ -4206,7 +4206,7 @@
         <dc:format>image/svg+xml</dc:format>
         <dc:type
            rdf:resource="http://purl.org/dc/dcmitype/StillImage" />
-        <dc:title></dc:title>
+        <dc:title />
       </cc:Work>
     </rdf:RDF>
   </metadata>
@@ -4215,7 +4215,7 @@
      id="layer9"
      inkscape:label="background"
      transform="translate(-10.216051,-377.80682)"
-     style="display:none"
+     style="display:inline"
      sodipodi:insensitive="true">
     <rect
        style="opacity:1;vector-effect:none;fill:#ffffff;fill-opacity:1;stroke:none;stroke-width:0.26458332px;stroke-linecap:butt;stroke-linejoin:miter;stroke-miterlimit:4;stroke-dasharray:none;stroke-dashoffset:0;stroke-opacity:1;marker:none;marker-end:url(#DotL-2-2-52-3-6-2)"
@@ -4236,12 +4236,12 @@
     <image
        sodipodi:absref="/home/ivor/Documents/Code/rust/spread_spectrum_watermarking/repo/doc/../tests/porcelain_cat_grey_background.jpg"
        xlink:href="../tests/porcelain_cat_grey_background.jpg"
-       width="169.33333"
-       height="117.475"
-       preserveAspectRatio="none"
-       id="image842"
+       y="20.548214"
        x="23.434525"
-       y="20.548214" />
+       id="image842"
+       preserveAspectRatio="none"
+       height="117.475"
+       width="169.33333" />
   </g>
   <g
      inkscape:groupmode="layer"

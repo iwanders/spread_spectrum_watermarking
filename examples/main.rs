@@ -54,11 +54,7 @@ struct Cli {
 }
 
 #[derive(Args)]
-struct CmdWatermark {
-    /// The file to operate on.
-    #[clap(action)]
-    file: String,
-
+struct WatermarkConfig {
     /// Watermark length.
     #[clap(default_value_t = 1000, value_parser, long)]
     length: usize,
@@ -66,6 +62,16 @@ struct CmdWatermark {
     /// Watermark strength (alpha).
     #[clap(default_value_t = 0.1, value_parser, long)]
     strength: f32,
+}
+
+#[derive(Args)]
+struct CmdWatermark {
+    /// The file to operate on.
+    #[clap(action)]
+    file: String,
+
+    #[clap(flatten)]
+    config: WatermarkConfig,
 
     /// Description.
     #[clap(long, short)]
@@ -163,10 +169,10 @@ fn cmd_watermark(args: &CmdWatermark) -> Result<(), Box<dyn std::error::Error>> 
 
     let orig_base = orig_image.clone();
 
-    let mark = wm::MarkBuf::generate_normal(args.length);
+    let mark = wm::MarkBuf::generate_normal(args.config.length);
 
     let mut config = wm::WriteConfig::default();
-    config.insertion = wm::Insertion::Option2(args.strength);
+    config.insertion = wm::Insertion::Option2(args.config.strength);
     let watermarker = wm::Writer::new(orig_image, config);
     let res = watermarker.mark(&[&mark]);
 
@@ -180,7 +186,7 @@ fn cmd_watermark(args: &CmdWatermark) -> Result<(), Box<dyn std::error::Error>> 
     let storage = Version1Storage {
         config: Configuration {
             ordering: SerializableOrdering::Energy,
-            insert_extract: SerializableInsertExtract::Option2(args.strength),
+            insert_extract: SerializableInsertExtract::Option2(args.config.strength),
         },
         watermarks: vec![DescribedWatermark {
             values: mark.data().to_vec(),
@@ -198,15 +204,17 @@ fn cmd_watermark(args: &CmdWatermark) -> Result<(), Box<dyn std::error::Error>> 
         serde_json::to_string_pretty(&storage).unwrap(),
     )?;
 
-    let read_config = wm::ReadConfig::default();
-    let reader = wm::Reader::base(orig_base, read_config);
-    let derived = wm::Reader::derived(image::DynamicImage::ImageRgb8(image_derived));
-    let mut extracted_mark = vec![0f32; args.length];
-    reader.extract(&derived, &mut extracted_mark);
-    let tester = wm::Tester::new(&extracted_mark);
-    let sim = tester.similarity(&mark);
-    println!("sim: {sim:?}");
-    println!("exceeds 6 sigma: {}", sim.exceeds_sigma(6.0));
+    if args.print_similarity {
+        let read_config = wm::ReadConfig::default();
+        let reader = wm::Reader::base(orig_base, read_config);
+        let derived = wm::Reader::derived(image::DynamicImage::ImageRgb8(image_derived));
+        let mut extracted_mark = vec![0f32; args.config.length];
+        reader.extract(&derived, &mut extracted_mark);
+        let tester = wm::Tester::new(&extracted_mark);
+        let sim = tester.similarity(&mark);
+        println!("sim: {sim:?}");
+        println!("exceeds 6 sigma: {}", sim.exceeds_sigma(6.0));
+    }
 
     Ok(())
 }

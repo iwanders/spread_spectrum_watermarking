@@ -7,6 +7,8 @@ use clap::{Args, Parser, Subcommand};
 
 use serde::{Deserialize, Serialize};
 
+// --- Specifying watermark configuration, serializable as well as argument-handling ---
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, clap::ValueEnum)]
 enum SerializableOrdering {
     /// Sort by energy, taking the coefficient squared.
@@ -30,29 +32,56 @@ impl SerializableOrdering {
 impl std::fmt::Display for SerializableOrdering {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
         match *self {
-            SerializableOrdering::Energy => write!(f, "Energy")?,
-            SerializableOrdering::EnergyOrthogonal => write!(f, "EnergyOrthogonal")?,
-            SerializableOrdering::Legacy => write!(f, "Legacy")?,
+            SerializableOrdering::Energy => write!(f, "energy")?,
+            SerializableOrdering::EnergyOrthogonal => write!(f, "energy-orthogonal")?,
+            SerializableOrdering::Legacy => write!(f, "legacy")?,
         }
         Ok(())
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
-enum SerializableInsertExtract {
+#[derive(Debug, Clone, Copy, clap::ValueEnum, Serialize, Deserialize)]
+enum InsertExtractMethod {
     /// Option 2 from the paper; x_i' = x_i (1 + alpha * w_i),  alpha as specified.
-    Option2(f32),
+    Option2,
+}
+
+impl std::fmt::Display for InsertExtractMethod {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        match *self {
+            InsertExtractMethod::Option2 => write!(f, "option2")?,
+        }
+        Ok(())
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug, Args, Clone, Copy)]
+struct SerializableInsertExtract {
+    /// Strength, alpha in the equations.
+    #[clap(default_value_t = 0.1, value_parser, long)]
+    alpha: f32,
+    /// Method to insert and extract with.
+    #[clap(default_value_t = InsertExtractMethod::Option2, value_parser, long)]
+    method: InsertExtractMethod,
+}
+
+impl std::fmt::Display for SerializableInsertExtract {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        write!(f, "alpha: {}", self.alpha)?;
+        write!(f, "method: {}", self.method)?;
+        Ok(())
+    }
 }
 
 impl SerializableInsertExtract {
     pub fn to_insertion(&self) -> wm::Insertion {
-        match *self {
-            SerializableInsertExtract::Option2(alpha) => wm::Insertion::Option2(alpha),
+        match self.method {
+            InsertExtractMethod::Option2 => wm::Insertion::Option2(self.alpha),
         }
     }
     pub fn to_extraction(&self) -> wm::Extraction {
-        match *self {
-            SerializableInsertExtract::Option2(alpha) => wm::Extraction::Option2(alpha),
+        match self.method {
+            InsertExtractMethod::Option2 => wm::Extraction::Option2(self.alpha),
         }
     }
 }
@@ -80,28 +109,7 @@ enum WatermarkStorage {
     Version1(Version1Storage),
 }
 
-#[derive(Debug, Clone, Copy, clap::ValueEnum)]
-enum InsertExtractMethod {
-    /// Option 2 from the paper; x_i' = x_i (1 + alpha * w_i),  alpha as specified.
-    Option2,
-}
-
-impl InsertExtractMethod {
-    pub fn to_serializable(&self, alpha: f32) -> SerializableInsertExtract {
-        match *self {
-            InsertExtractMethod::Option2 => SerializableInsertExtract::Option2(alpha),
-        }
-    }
-}
-
-impl std::fmt::Display for InsertExtractMethod {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
-        match *self {
-            InsertExtractMethod::Option2 => write!(f, "Option2")?,
-        }
-        Ok(())
-    }
-}
+//----- start of argument handling -----
 
 #[derive(Parser)]
 #[clap(author, version, about, long_about = None)]
@@ -111,34 +119,32 @@ struct Cli {
 }
 
 #[derive(Args)]
+/// Struct to actually encapsulate all info we need to write or read watermarks.
 struct WatermarkConfig {
     /// Watermark length.
     #[clap(default_value_t = 1000, value_parser, long)]
     length: usize,
-
-    /// Watermark strength (alpha).
-    #[clap(default_value_t = 0.1, value_parser, long)]
-    strength: f32,
 
     /// The ordering to be used.
     #[clap(default_value_t = SerializableOrdering::Energy, value_parser, long)]
     ordering: SerializableOrdering,
 
     /// The insertion and extraction method used.
-    #[clap(default_value_t = InsertExtractMethod::Option2, value_parser, long)]
-    method: InsertExtractMethod,
+    #[clap(flatten)]
+    method: SerializableInsertExtract,
 }
 
 #[derive(Args)]
+/// Command to watermark a file.
 struct CmdWatermark {
-    /// The file to operate on.
+    /// The file to to watermark.
     #[clap(action)]
     file: String,
 
     #[clap(flatten)]
     config: WatermarkConfig,
 
-    /// Description.
+    /// Description to associate with the watermark (written into the json file).
     #[clap(long, short)]
     description: Option<String>,
 
@@ -237,7 +243,7 @@ fn cmd_watermark(args: &CmdWatermark) -> Result<(), Box<dyn std::error::Error>> 
     let mark = wm::MarkBuf::generate_normal(args.config.length);
 
     let mut config = wm::WriteConfig::default();
-    let insertion_serializable = args.config.method.to_serializable(args.config.strength);
+    let insertion_serializable = args.config.method;
     config.insertion = insertion_serializable.to_insertion();
     config.ordering = args.config.ordering.into_ordering();
     let watermarker = wm::Writer::new(orig_image, config);

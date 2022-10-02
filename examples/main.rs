@@ -154,6 +154,23 @@ struct CmdWatermark {
 }
 
 #[derive(Args)]
+/// Command to watermark a file.
+struct CmdTest {
+    /// The original file.
+    #[clap(action)]
+    base: String,
+
+    /// The derived (watermarked) file.
+    #[clap(action)]
+    watermarked: String,
+
+    /// The watermark files to test from.
+    #[clap(action,required = true)]
+    watermark_files: Vec<String>,
+}
+
+
+#[derive(Args)]
 struct Legacy {
     /// The base file to operate on.
     #[clap(action)]
@@ -172,6 +189,8 @@ struct Legacy {
 enum Commands {
     /// Embed a watermark into a file.
     Watermark(CmdWatermark),
+    /// Test if any of the watermarks are present in the watermarked file.
+    Test(CmdTest),
     /// Embed a watermark into a file.
     Legacy(Legacy),
 }
@@ -292,6 +311,12 @@ fn cmd_watermark(args: &CmdWatermark) -> Result<(), Box<dyn std::error::Error>> 
     Ok(())
 }
 
+
+fn cmd_test(args: &CmdTest) -> Result<(), Box<dyn std::error::Error>> {
+
+    Ok(())
+}
+
 fn legacy(base_image_path: &PathBuf, derived_image_path: &PathBuf, watermark_length: usize) {
     let base_image = image::open(&base_image_path)
         .unwrap_or_else(|_| panic!("could not load image at {:?}", base_image_path));
@@ -328,6 +353,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // matches just as you would the top level cmd
     match &cli.command {
         Some(Commands::Watermark(ref v)) => cmd_watermark(v)?,
+        Some(Commands::Test(ref v)) => cmd_test(v)?,
         Some(Commands::Legacy(v)) => {
             let base_image_path = PathBuf::from(&v.base_file);
             let derived_image_path = PathBuf::from(&v.derived_file);

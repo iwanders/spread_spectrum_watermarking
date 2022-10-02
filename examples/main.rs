@@ -7,9 +7,7 @@ use clap::{Args, Parser, Subcommand};
 
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Copy)]
-#[derive(Serialize, Deserialize)]
-#[derive(clap::ValueEnum)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, clap::ValueEnum)]
 enum SerializableOrdering {
     /// Sort by energy, taking the coefficient squared.
     Energy,
@@ -22,9 +20,9 @@ enum SerializableOrdering {
 impl SerializableOrdering {
     pub fn into_ordering(&self) -> wm::OrderingMethod {
         match *self {
-            SerializableOrdering::Energy => {wm::OrderingMethod::Energy},
-            SerializableOrdering::EnergyOrthogonal => {wm::OrderingMethod::EnergyOrthogonal},
-            SerializableOrdering::Legacy => {wm::OrderingMethod::Legacy},
+            SerializableOrdering::Energy => wm::OrderingMethod::Energy,
+            SerializableOrdering::EnergyOrthogonal => wm::OrderingMethod::EnergyOrthogonal,
+            SerializableOrdering::Legacy => wm::OrderingMethod::Legacy,
         }
     }
 }
@@ -32,14 +30,13 @@ impl SerializableOrdering {
 impl std::fmt::Display for SerializableOrdering {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
         match *self {
-            SerializableOrdering::Energy => {write!(f, "Energy")?},
-            SerializableOrdering::EnergyOrthogonal => {write!(f, "EnergyOrthogonal")?},
-            SerializableOrdering::Legacy => {write!(f, "Legacy")?},
+            SerializableOrdering::Energy => write!(f, "Energy")?,
+            SerializableOrdering::EnergyOrthogonal => write!(f, "EnergyOrthogonal")?,
+            SerializableOrdering::Legacy => write!(f, "Legacy")?,
         }
         Ok(())
     }
 }
-
 
 #[derive(Serialize, Deserialize, Debug)]
 enum SerializableInsertExtract {
@@ -59,7 +56,6 @@ impl SerializableInsertExtract {
         }
     }
 }
-
 
 #[derive(Serialize, Deserialize, Debug)]
 struct Configuration {
@@ -84,17 +80,14 @@ enum WatermarkStorage {
     Version1(Version1Storage),
 }
 
-
-
-#[derive(Debug, Clone, Copy)]
-#[derive(clap::ValueEnum)]
+#[derive(Debug, Clone, Copy, clap::ValueEnum)]
 enum InsertExtractMethod {
     /// Option 2 from the paper; x_i' = x_i (1 + alpha * w_i),  alpha as specified.
     Option2,
 }
 
 impl InsertExtractMethod {
-    pub fn to_serializible(&self, alpha: f32) -> SerializableInsertExtract {
+    pub fn to_serializable(&self, alpha: f32) -> SerializableInsertExtract {
         match *self {
             InsertExtractMethod::Option2 => SerializableInsertExtract::Option2(alpha),
         }
@@ -104,12 +97,11 @@ impl InsertExtractMethod {
 impl std::fmt::Display for InsertExtractMethod {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
         match *self {
-            InsertExtractMethod::Option2 => {write!(f, "Option2")?},
+            InsertExtractMethod::Option2 => write!(f, "Option2")?,
         }
         Ok(())
     }
 }
-
 
 #[derive(Parser)]
 #[clap(author, version, about, long_about = None)]
@@ -245,8 +237,8 @@ fn cmd_watermark(args: &CmdWatermark) -> Result<(), Box<dyn std::error::Error>> 
     let mark = wm::MarkBuf::generate_normal(args.config.length);
 
     let mut config = wm::WriteConfig::default();
-    let insertion_serializible = args.config.method.to_serializible(args.config.strength);
-    config.insertion = insertion_serializible.to_insertion();
+    let insertion_serializable = args.config.method.to_serializable(args.config.strength);
+    config.insertion = insertion_serializable.to_insertion();
     config.ordering = args.config.ordering.into_ordering();
     let watermarker = wm::Writer::new(orig_image, config);
     let res = watermarker.mark(&[&mark]);
@@ -261,7 +253,7 @@ fn cmd_watermark(args: &CmdWatermark) -> Result<(), Box<dyn std::error::Error>> 
     let storage = Version1Storage {
         config: Configuration {
             ordering: args.config.ordering,
-            insert_extract: insertion_serializible,
+            insert_extract: insertion_serializable,
         },
         watermarks: vec![DescribedWatermark {
             values: mark.data().to_vec(),

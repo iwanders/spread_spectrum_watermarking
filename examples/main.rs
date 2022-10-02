@@ -47,6 +47,20 @@ enum SerializableInsertExtract {
     Option2(f32),
 }
 
+impl SerializableInsertExtract {
+    pub fn to_insertion(&self) -> wm::Insertion {
+        match *self {
+            SerializableInsertExtract::Option2(alpha) => wm::Insertion::Option2(alpha),
+        }
+    }
+    pub fn to_extraction(&self) -> wm::Extraction {
+        match *self {
+            SerializableInsertExtract::Option2(alpha) => wm::Extraction::Option2(alpha),
+        }
+    }
+}
+
+
 #[derive(Serialize, Deserialize, Debug)]
 struct Configuration {
     insert_extract: SerializableInsertExtract,
@@ -70,6 +84,33 @@ enum WatermarkStorage {
     Version1(Version1Storage),
 }
 
+
+
+#[derive(Debug, Clone, Copy)]
+#[derive(clap::ValueEnum)]
+enum InsertExtractMethod {
+    /// Option 2 from the paper; x_i' = x_i (1 + alpha * w_i),  alpha as specified.
+    Option2,
+}
+
+impl InsertExtractMethod {
+    pub fn to_serializible(&self, alpha: f32) -> SerializableInsertExtract {
+        match *self {
+            InsertExtractMethod::Option2 => SerializableInsertExtract::Option2(alpha),
+        }
+    }
+}
+
+impl std::fmt::Display for InsertExtractMethod {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        match *self {
+            InsertExtractMethod::Option2 => {write!(f, "Option2")?},
+        }
+        Ok(())
+    }
+}
+
+
 #[derive(Parser)]
 #[clap(author, version, about, long_about = None)]
 struct Cli {
@@ -90,6 +131,10 @@ struct WatermarkConfig {
     /// The ordering to be used.
     #[clap(default_value_t = SerializableOrdering::Energy, value_parser, long)]
     ordering: SerializableOrdering,
+
+    /// The insertion and extraction method used.
+    #[clap(default_value_t = InsertExtractMethod::Option2, value_parser, long)]
+    method: InsertExtractMethod,
 }
 
 #[derive(Args)]
@@ -200,7 +245,8 @@ fn cmd_watermark(args: &CmdWatermark) -> Result<(), Box<dyn std::error::Error>> 
     let mark = wm::MarkBuf::generate_normal(args.config.length);
 
     let mut config = wm::WriteConfig::default();
-    config.insertion = wm::Insertion::Option2(args.config.strength);
+    let insertion_serializible = args.config.method.to_serializible(args.config.strength);
+    config.insertion = insertion_serializible.to_insertion();
     config.ordering = args.config.ordering.into_ordering();
     let watermarker = wm::Writer::new(orig_image, config);
     let res = watermarker.mark(&[&mark]);
@@ -215,7 +261,7 @@ fn cmd_watermark(args: &CmdWatermark) -> Result<(), Box<dyn std::error::Error>> 
     let storage = Version1Storage {
         config: Configuration {
             ordering: args.config.ordering,
-            insert_extract: SerializableInsertExtract::Option2(args.config.strength),
+            insert_extract: insertion_serializible,
         },
         watermarks: vec![DescribedWatermark {
             values: mark.data().to_vec(),

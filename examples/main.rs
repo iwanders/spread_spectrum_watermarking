@@ -7,7 +7,9 @@ use clap::{Args, Parser, Subcommand};
 
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy)]
+#[derive(Serialize, Deserialize)]
+#[derive(clap::ValueEnum)]
 enum SerializableOrdering {
     /// Sort by energy, taking the coefficient squared.
     Energy,
@@ -16,6 +18,28 @@ enum SerializableOrdering {
     /// Legacy sorting from the 2013 Python code.
     Legacy,
 }
+
+impl SerializableOrdering {
+    pub fn into_ordering(&self) -> wm::OrderingMethod {
+        match *self {
+            SerializableOrdering::Energy => {wm::OrderingMethod::Energy},
+            SerializableOrdering::EnergyOrthogonal => {wm::OrderingMethod::EnergyOrthogonal},
+            SerializableOrdering::Legacy => {wm::OrderingMethod::Legacy},
+        }
+    }
+}
+
+impl std::fmt::Display for SerializableOrdering {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        match *self {
+            SerializableOrdering::Energy => {write!(f, "Energy")?},
+            SerializableOrdering::EnergyOrthogonal => {write!(f, "EnergyOrthogonal")?},
+            SerializableOrdering::Legacy => {write!(f, "Legacy")?},
+        }
+        Ok(())
+    }
+}
+
 
 #[derive(Serialize, Deserialize, Debug)]
 enum SerializableInsertExtract {
@@ -62,6 +86,10 @@ struct WatermarkConfig {
     /// Watermark strength (alpha).
     #[clap(default_value_t = 0.1, value_parser, long)]
     strength: f32,
+
+    /// The ordering to be used.
+    #[clap(default_value_t = SerializableOrdering::Energy, value_parser, long)]
+    ordering: SerializableOrdering,
 }
 
 #[derive(Args)]
@@ -173,6 +201,7 @@ fn cmd_watermark(args: &CmdWatermark) -> Result<(), Box<dyn std::error::Error>> 
 
     let mut config = wm::WriteConfig::default();
     config.insertion = wm::Insertion::Option2(args.config.strength);
+    config.ordering = args.config.ordering.into_ordering();
     let watermarker = wm::Writer::new(orig_image, config);
     let res = watermarker.mark(&[&mark]);
 
@@ -185,7 +214,7 @@ fn cmd_watermark(args: &CmdWatermark) -> Result<(), Box<dyn std::error::Error>> 
     // Create the watermark json file.
     let storage = Version1Storage {
         config: Configuration {
-            ordering: SerializableOrdering::Energy,
+            ordering: args.config.ordering,
             insert_extract: SerializableInsertExtract::Option2(args.config.strength),
         },
         watermarks: vec![DescribedWatermark {

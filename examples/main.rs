@@ -1,8 +1,50 @@
 use spread_spectrum_watermarking as wm;
+use std::io::prelude::*;
 use std::path::PathBuf;
 use wm::prelude::*;
 
 use clap::{Args, Parser, Subcommand};
+
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Serialize, Deserialize)]
+enum SerializableOrdering {
+    /// Sort by energy, taking the coefficient squared.
+    Energy,
+    /// Sort by energy, but with the DCT scaled to be orthogonal.
+    EnergyOrthogonal,
+    /// Legacy sorting from the 2013 Python code.
+    Legacy,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+enum SerializableInsertExtract {
+    /// Option 2 from the paper; x_i' = x_i (1 + alpha * w_i),  alpha as specified.
+    Option2(f32),
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct Configuration {
+    insert_extract: SerializableInsertExtract,
+    ordering: SerializableOrdering,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct DescribedWatermark {
+    values: Vec<f32>,
+    description: String,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct Version1Storage {
+    config: Configuration,
+    watermarks: Vec<DescribedWatermark>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+enum WatermarkStorage {
+    Version1(Version1Storage),
+}
 
 #[derive(Parser)]
 #[clap(author, version, about, long_about = None)]
@@ -11,25 +53,27 @@ struct Cli {
     command: Option<Commands>,
 }
 
-// #[derive(Args)]
-// struct Config {
-// #[clap(action)]
-// thing: String,
-// }
-
 #[derive(Args)]
-struct Embed {
+struct CmdWatermark {
     /// The file to operate on.
     #[clap(action)]
     file: String,
 
     /// Watermark length.
     #[clap(default_value_t = 1000, value_parser, long)]
-    watermark_length: usize,
+    length: usize,
 
-    /// Watermark strength.
+    /// Watermark strength (alpha).
     #[clap(default_value_t = 0.1, value_parser, long)]
-    watermark_strength: f32,
+    strength: f32,
+
+    /// Description.
+    #[clap(long, short)]
+    description: Option<String>,
+
+    /// Show embedded watermark similarity.
+    #[clap(short, default_value_t = false)]
+    print_similarity: bool,
 }
 
 #[derive(Args)]
@@ -50,7 +94,7 @@ struct Legacy {
 #[derive(Subcommand)]
 enum Commands {
     /// Embed a watermark into a file.
-    Embed(Embed),
+    Watermark(CmdWatermark),
     /// Embed a watermark into a file.
     Legacy(Legacy),
 }
@@ -90,49 +134,81 @@ So a list.
 
 */
 
-fn do_thing(image_path: &PathBuf, watermark_strength: f32) {
+fn cmd_watermark(args: &CmdWatermark) -> Result<(), Box<dyn std::error::Error>> {
+    let image_path = PathBuf::from(&args.file);
     let orig_image = image::open(&image_path)
-        .unwrap_or_else(|_| panic!("could not load image at {:?}", image_path));
+        .unwrap_or_else(|_| panic!("Could not load image at {:?}", image_path));
+
+    // Do some name wrangling to make /tmp/foo.jpg into /tmp/foo_wm.png and /tmp/foo_wm.json
+    let mut image_out_path = image_path.with_extension("");
+    let mut updated_filename = image_out_path.file_name().unwrap().to_owned();
+    updated_filename.push("_wm");
+    image_out_path.set_file_name(updated_filename);
+    image_out_path = image_out_path.with_extension("png");
+    let json_out_path = image_out_path.with_extension("json");
+
+    if image_out_path.try_exists()? {
+        return Err(Box::new(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            format!("{} file already exists", image_out_path.display()),
+        )));
+    }
+
+    if json_out_path.try_exists()? {
+        return Err(Box::new(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            format!("{} file already exists", json_out_path.display()),
+        )));
+    }
 
     let orig_base = orig_image.clone();
 
-    let count = 1;
-    let mut marks: Vec<_> = vec![];
-    let mark_length = 1000;
-    for _i in 0..count {
-        marks.push(wm::MarkBuf::generate_normal(mark_length));
-    }
+    let mark = wm::MarkBuf::generate_normal(args.length);
 
     let mut config = wm::WriteConfig::default();
-    config.insertion = wm::Insertion::Option2(watermark_strength);
+    config.insertion = wm::Insertion::Option2(args.strength);
     let watermarker = wm::Writer::new(orig_image, config);
-    let res = watermarker.mark(&marks.iter().map(|x| x as &dyn Mark).collect::<Vec<_>>());
-
-    let image_derived = res.clone();
+    let res = watermarker.mark(&[&mark]);
 
     let img_back_to_rgb = res.into_rgb8();
-    img_back_to_rgb
-        .save(&PathBuf::from("/tmp/watermarked.png"))
-        .expect("may not fail");
+
+    // Store derived to print the score of the embedded value.
+    let image_derived = img_back_to_rgb.clone();
+    img_back_to_rgb.save(&PathBuf::from(image_out_path))?;
+
+    // Create the watermark json file.
+    let storage = Version1Storage {
+        config: Configuration {
+            ordering: SerializableOrdering::Energy,
+            insert_extract: SerializableInsertExtract::Option2(args.strength),
+        },
+        watermarks: vec![DescribedWatermark {
+            values: mark.data().to_vec(),
+            description: args
+                .description
+                .as_ref()
+                .unwrap_or(&String::from(""))
+                .to_string(),
+        }],
+    };
+    let storage = WatermarkStorage::Version1(storage);
+
+    std::fs::write(
+        json_out_path,
+        serde_json::to_string_pretty(&storage).unwrap(),
+    )?;
 
     let read_config = wm::ReadConfig::default();
     let reader = wm::Reader::base(orig_base, read_config);
-    let derived = wm::Reader::derived(image_derived);
-
-    let mut extracted_mark = vec![0f32; mark_length];
+    let derived = wm::Reader::derived(image::DynamicImage::ImageRgb8(image_derived));
+    let mut extracted_mark = vec![0f32; args.length];
     reader.extract(&derived, &mut extracted_mark);
-
     let tester = wm::Tester::new(&extracted_mark);
+    let sim = tester.similarity(&mark);
+    println!("sim: {sim:?}");
+    println!("exceeds 6 sigma: {}", sim.exceeds_sigma(6.0));
 
-    let mut total_similarity = 0f32;
-    for mark in marks.iter() {
-        let sim = tester.similarity(&mark);
-        // println!("extracted: {extracted_mark:#?}");
-        println!("sim: {sim:?}");
-        println!("exceeds 6 sigma: {}", sim.exceeds_sigma(6.0));
-        total_similarity += sim.similarity;
-    }
-    println!("avg: {}", total_similarity / (marks.len() as f32));
+    Ok(())
 }
 
 fn legacy(base_image_path: &PathBuf, derived_image_path: &PathBuf, watermark_length: usize) {
@@ -164,17 +240,13 @@ fn legacy(base_image_path: &PathBuf, derived_image_path: &PathBuf, watermark_len
     println!("Extracted: {extracted_display:?}");
 }
 
-fn main() {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
 
     // You can check for the existence of subcommands, and if found use their
     // matches just as you would the top level cmd
     match &cli.command {
-        Some(Commands::Embed(v)) => {
-            let image_path = PathBuf::from(&v.file);
-
-            do_thing(&image_path, v.watermark_strength);
-        }
+        Some(Commands::Watermark(ref v)) => cmd_watermark(v)?,
         Some(Commands::Legacy(v)) => {
             let base_image_path = PathBuf::from(&v.base_file);
             let derived_image_path = PathBuf::from(&v.derived_file);
@@ -183,4 +255,5 @@ fn main() {
         }
         None => {}
     }
+    Ok(())
 }

@@ -72,6 +72,19 @@ pub enum Insertion {
     Custom(InsertFunction),
 }
 
+impl std::fmt::Debug for Insertion {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        match self {
+            Insertion::Option2(alpha) => {
+                write!(f, "Insertion::Option2({:?})", alpha)
+            }
+            Insertion::Custom(_) => {
+                write!(f, "Insertion::Custom")
+            }
+        }
+    }
+}
+
 /// Configuration to embed watermark with.
 pub struct WriteConfig {
     pub insertion: Insertion,
@@ -122,6 +135,25 @@ pub enum OrderingMethod {
     Legacy,
     /// Custom sorting function.
     Custom(OrderingFunction),
+}
+
+impl std::fmt::Debug for OrderingMethod {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        match self {
+            OrderingMethod::Energy => {
+                write!(f, "OrderingMethod::Energy")
+            }
+            OrderingMethod::EnergyOrthogonal => {
+                write!(f, "OrderingMethod::EnergyOrthogonal")
+            }
+            OrderingMethod::Legacy => {
+                write!(f, "OrderingMethod::Legacy")
+            }
+            OrderingMethod::Custom(_) => {
+                write!(f, "OrderingMethod::Custom")
+            }
+        }
+    }
 }
 
 impl OrderingMethod {

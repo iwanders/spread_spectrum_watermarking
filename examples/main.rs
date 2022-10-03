@@ -165,10 +165,9 @@ struct CmdTest {
     watermarked: String,
 
     /// The watermark files to test from.
-    #[clap(action,required = true)]
+    #[clap(action, required = true)]
     watermark_files: Vec<String>,
 }
-
 
 #[derive(Args)]
 struct Legacy {
@@ -311,9 +310,7 @@ fn cmd_watermark(args: &CmdWatermark) -> Result<(), Box<dyn std::error::Error>> 
     Ok(())
 }
 
-
 fn cmd_test(args: &CmdTest) -> Result<(), Box<dyn std::error::Error>> {
-
     let image_path_base = PathBuf::from(&args.base);
     let image_base = image::open(&image_path_base)
         .unwrap_or_else(|_| panic!("Could not load image at {:?}", image_path_base));
@@ -327,24 +324,37 @@ fn cmd_test(args: &CmdTest) -> Result<(), Box<dyn std::error::Error>> {
         let interior = serde_json::from_str::<WatermarkStorage>(&contents)?;
         let WatermarkStorage::Version1(z) = interior;
         watermarks.push(z);
-
     }
 
     // println!("watermarks: {watermarks:?}");
 
     let use_config = watermarks.first().unwrap(); // guaranteed to be one by clap
-    let read_config = wm::ReadConfig{
+    let read_config = wm::ReadConfig {
         extraction: use_config.config.insert_extract.to_extraction(),
         ordering: use_config.config.ordering.into_ordering(),
     };
     let reader = wm::Reader::base(image_base, read_config);
     let derived = wm::Reader::derived(image_watermarked);
 
-    let mut extracted_mark = vec![0f32; use_config.watermarks.first().expect("At least one wm").values.len()];
+    let mut extracted_mark = vec![
+        0f32;
+        use_config
+            .watermarks
+            .first()
+            .expect("At least one wm")
+            .values
+            .len()
+    ];
     reader.extract(&derived, &mut extracted_mark);
 
     let tester = wm::Tester::new(&extracted_mark);
-    let sim = tester.similarity(&use_config.watermarks.first().expect("At least one wm").values);
+    let sim = tester.similarity(
+        &use_config
+            .watermarks
+            .first()
+            .expect("At least one wm")
+            .values,
+    );
     println!("sim: {sim:?}");
     println!("exceeds 6 sigma: {}", sim.exceeds_sigma(6.0));
 

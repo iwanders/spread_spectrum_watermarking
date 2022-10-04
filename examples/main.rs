@@ -135,6 +135,16 @@ struct WatermarkConfig {
 }
 
 #[derive(Args)]
+/// Struct to encapsulate all information we need to test if watermarks match.
+struct TestConfig {
+    /// If the similarity exceeds this value it is considered to be matching. The similarity is
+    /// equal to exceeding 'similarity' sigma's in a standard distribution. Default of 6 is approx
+    /// 1e-9 chance that a a random watermark would match this.
+    #[clap(default_value_t = 6.0, value_parser, long)]
+    similarity: f32,
+}
+
+#[derive(Args)]
 /// Command to watermark a file.
 struct CmdWatermark {
     /// The file to to watermark.
@@ -156,6 +166,9 @@ struct CmdWatermark {
 #[derive(Args)]
 /// Command to watermark a file.
 struct CmdTest {
+    #[clap(flatten)]
+    config: TestConfig,
+
     /// The original file.
     #[clap(action)]
     base: String,
@@ -348,6 +361,7 @@ fn cmd_test(args: &CmdTest) -> Result<(), Box<dyn std::error::Error>> {
     reader.extract(&derived, &mut extracted_mark);
 
     let tester = wm::Tester::new(&extracted_mark);
+
     let sim = tester.similarity(
         &use_config
             .watermarks
@@ -355,8 +369,12 @@ fn cmd_test(args: &CmdTest) -> Result<(), Box<dyn std::error::Error>> {
             .expect("At least one wm")
             .values,
     );
-    println!("sim: {sim:?}");
-    println!("exceeds 6 sigma: {}", sim.exceeds_sigma(6.0));
+    println!("Similarity: {sim:?}");
+    println!(
+        "exceeds {} sigma: {}",
+        args.config.similarity,
+        sim.exceeds_sigma(args.config.similarity)
+    );
 
     Ok(())
 }

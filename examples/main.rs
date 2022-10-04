@@ -231,25 +231,16 @@ main watermark <file>
     * conditional flag to overwrite.
     * How do we handle the extension?
 
-Bulk interface;
-main embed <file> [watermark.json, ...]
-
 main test <base_file> <derived_file> [watermarks_to_check_against.json, ...]
 
-main extract <base_file> <derived_file> -> Writes similar json file...
-
-watermark.json must hold:
-    WriteConfig
-    ReadConfig counterpart.
-    length
-    alpha
-    Lets also store the non-blindness, what way if we implement blind watermarking... we can accomodate.s
-
-Best to store multiple watermarks in watermark.json.
-
-So a list.
+Bulk interface?;
+main extract <base_file> <derived_file> -> Writes similar json file with extracted watermark.
+main update <file.json> -d -WatermarkConfig
+main embed <file> [watermark.json]
+main similar <extracted.json> [<watermarks.json>,...]
 
 
+Lets also store the non-blindness, what way if we implement blind watermarking... we can accomodate.
 */
 
 fn cmd_watermark(args: &CmdWatermark) -> Result<(), Box<dyn std::error::Error>> {

@@ -235,11 +235,11 @@ fn ordering_orthogonal(
         let s = (1.0 / (2.0 * n as f32)).sqrt();
 
         // If on first row, it is a k=0 index. Or if on first column, it is also a zero index.
-        return if index < width || (index % width) == 0 {
+        if index < width || (index % width) == 0 {
             s_k0 * value
         } else {
             s * value
-        };
+        }
     };
 
     Box::new(

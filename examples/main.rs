@@ -1,7 +1,5 @@
 use spread_spectrum_watermarking as wm;
-use std::io::prelude::*;
 use std::path::PathBuf;
-use wm::prelude::*;
 
 use clap::{Args, Parser, Subcommand};
 
@@ -9,7 +7,7 @@ use serde::{Deserialize, Serialize};
 
 // --- Specifying watermark configuration, serializable as well as argument-handling ---
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, clap::ValueEnum)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, clap::ValueEnum, PartialEq, Hash, Eq)]
 enum SerializableOrdering {
     /// Sort by energy, taking the coefficient squared.
     Energy,
@@ -40,7 +38,7 @@ impl std::fmt::Display for SerializableOrdering {
     }
 }
 
-#[derive(Debug, Clone, Copy, clap::ValueEnum, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, clap::ValueEnum, Serialize, Deserialize, PartialEq, Hash, Eq)]
 enum InsertExtractMethod {
     /// Option 2 from the paper; x_i' = x_i (1 + alpha * w_i),  alpha as specified.
     Option2,
@@ -55,7 +53,7 @@ impl std::fmt::Display for InsertExtractMethod {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug, Args, Clone, Copy)]
+#[derive(Serialize, Deserialize, Debug, Args, Clone, Copy, PartialEq)]
 struct SerializableInsertExtract {
     /// Strength, alpha in the equations.
     #[clap(default_value_t = 0.1, value_parser, long)]
@@ -64,6 +62,18 @@ struct SerializableInsertExtract {
     #[clap(default_value_t = InsertExtractMethod::Option2, value_parser, long)]
     method: InsertExtractMethod,
 }
+
+impl std::hash::Hash for SerializableInsertExtract {
+    fn hash<H>(&self, state: &mut H)
+    where
+        H: std::hash::Hasher,
+    {
+        self.alpha.to_bits().hash(state);
+        self.method.hash(state);
+    }
+}
+
+impl Eq for SerializableInsertExtract {}
 
 impl std::fmt::Display for SerializableInsertExtract {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
@@ -86,7 +96,7 @@ impl SerializableInsertExtract {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Eq, PartialEq, Hash, Copy, Clone)]
 struct Configuration {
     insert_extract: SerializableInsertExtract,
     ordering: SerializableOrdering,
@@ -339,42 +349,57 @@ fn cmd_test(args: &CmdTest) -> Result<(), Box<dyn std::error::Error>> {
         watermarks.push(z);
     }
 
+    // Keep a cache of retrieved watermarks associated with their configuration and length.
+    let mut retrieved: std::collections::HashMap<(Configuration, usize), Vec<f32>> =
+        Default::default();
+
     // println!("watermarks: {watermarks:?}");
 
-    let use_config = watermarks.first().unwrap(); // guaranteed to be one by clap
-    let read_config = wm::ReadConfig {
-        extraction: use_config.config.insert_extract.to_extraction(),
-        ordering: use_config.config.ordering.into_ordering(),
-    };
-    let reader = wm::Reader::base(image_base, read_config);
-    let derived = wm::Reader::derived(image_watermarked);
+    // Retrieve all the watermarks we want with their appropriate configuration.
+    for watermark_info in watermarks.iter() {
 
-    let mut extracted_mark = vec![
-        0f32;
-        use_config
-            .watermarks
-            .first()
-            .expect("At least one wm")
-            .values
-            .len()
-    ];
-    reader.extract(&derived, &mut extracted_mark);
+        // Config for all watermarks in a particular file is shared.
+        let config = &watermark_info.config;
 
-    let tester = wm::Tester::new(&extracted_mark);
+        // Iterate through all watermarks.
+        for watermark in watermark_info.watermarks.iter() {
 
-    let sim = tester.similarity(
-        &use_config
-            .watermarks
-            .first()
-            .expect("At least one wm")
-            .values,
-    );
-    println!("Similarity: {sim:?}");
-    println!(
-        "exceeds {} sigma: {}",
-        args.config.similarity,
-        sim.exceeds_sigma(args.config.similarity)
-    );
+            // Key for this is based on config and watermark length.
+            let key = (*config, watermark.values.len());
+            if !retrieved.contains_key(&key) {
+                // Key is not present, read the watermark according to this config and length.
+                let read_config = wm::ReadConfig {
+                    extraction: config.insert_extract.to_extraction(),
+                    ordering: config.ordering.into_ordering(),
+                };
+
+                let reader = wm::Reader::base(image_base.clone(), read_config);
+                let derived = wm::Reader::derived(image_watermarked.clone());
+
+                let mut extracted_mark = vec![0f32; key.1];
+                reader.extract(&derived, &mut extracted_mark);
+                retrieved.insert(key, extracted_mark);
+                // println!("retrieved, len: {}", key.1);
+            }
+
+            // We got here, so key must be present in the hashmap now.
+            let extracted_mark = retrieved.get(&key).unwrap();
+
+            // Use the extracted watermark and test it against the suspected mark.
+            let tester = wm::Tester::new(&extracted_mark);
+            let sim = tester.similarity(&watermark.values);
+
+            // Print results.
+            println!("-");
+            println!("  Description: {}", watermark.description);
+            println!("  Similarity: {}", sim.similarity);
+            println!(
+                "  Exceeds {} sigma: {}",
+                args.config.similarity,
+                sim.exceeds_sigma(args.config.similarity)
+            );
+        }
+    }
 
     Ok(())
 }

@@ -348,13 +348,11 @@ fn cmd_test(args: &CmdTest) -> Result<(), Box<dyn std::error::Error>> {
 
     // Retrieve all the watermarks we want with their appropriate configuration.
     for watermark_info in watermarks.iter() {
-
         // Config for all watermarks in a particular file is shared.
         let config = &watermark_info.config;
 
         // Iterate through all watermarks.
         for watermark in watermark_info.watermarks.iter() {
-
             // Key for this is based on config and watermark length.
             let key = (*config, watermark.values.len());
             if !retrieved.contains_key(&key) {

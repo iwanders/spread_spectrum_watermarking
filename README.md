@@ -32,6 +32,7 @@ This crate roughly follows the algorithm described in the following paper:
 
 This algorithm is also described in (expired) patent [US5930369](https://patents.google.com/patent/US5930369).
 
+This code is a rewrite of my [python implementation](https://github.com/iwanders/spread_spectrum_watermarking/tree/legacy_python_implementation) from 2013.
 
 ## Embedding a watermark
 

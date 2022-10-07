@@ -110,5 +110,22 @@ let embedded_sim = tester.similarity(&mark_to_check_for);
 println!("Similarity exceeding 6 sigma? {}", embedded_sim.exceeds_sigma(6.0));
 ```
 
+## Commandline tool
+
+Watermark an image with:
+```
+cargo r --release --example main -- watermark /tmp/porcelain_cat_grey_background.jpg
+```
+This creates `/tmp/porcelain_cat_grey_background_wm.png` and `/tmp/porcelain_cat_grey_background_wm.json` as output files. Output is always `png` extension, EXIF metadata is not preserved.
+
+Testing requires the original, a watermarked image and providing any number of suspected watermarks to check against:
+
+```
+cargo r --release --example main -- test /tmp/porcelain_cat_grey_background.jpg /tmp/porcelain_cat_grey_background_wm.png  /tmp/porcelain_cat_grey_background_wm.json
+```
+For each suspected watermark this prints information about it being present.
+
+Both subcommands have a lot options for further configuration, use `--help` to see all available options.
+
 ## License
 License is `BSD-3-Clause`.

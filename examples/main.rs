@@ -151,7 +151,7 @@ struct TestConfig {
     /// equal to exceeding 'similarity' sigma's in a standard distribution. Default of 6 is approx
     /// 1e-9 chance that a a random watermark would match this.
     #[clap(default_value_t = 6.0, value_parser, long)]
-    similarity: f32,
+    similarity_exceed: f32,
 }
 
 #[derive(Args)]
@@ -337,7 +337,7 @@ fn cmd_test(args: &CmdTest) -> Result<(), Box<dyn std::error::Error>> {
         let contents = std::fs::read_to_string(path)?;
         let interior = serde_json::from_str::<WatermarkStorage>(&contents)?;
         let WatermarkStorage::Version1(z) = interior;
-        watermarks.push(z);
+        watermarks.push((path, z));
     }
 
     // Keep a cache of retrieved watermarks associated with their configuration and length.
@@ -347,7 +347,7 @@ fn cmd_test(args: &CmdTest) -> Result<(), Box<dyn std::error::Error>> {
     // println!("watermarks: {watermarks:?}");
 
     // Retrieve all the watermarks we want with their appropriate configuration.
-    for watermark_info in watermarks.iter() {
+    for (path, watermark_info) in watermarks.iter() {
         // Config for all watermarks in a particular file is shared.
         let config = &watermark_info.config;
 
@@ -380,13 +380,17 @@ fn cmd_test(args: &CmdTest) -> Result<(), Box<dyn std::error::Error>> {
 
             // Print results.
             println!("-");
-            println!("  Description: {}", watermark.description);
-            println!("  Similarity: {}", sim.similarity);
             println!(
-                "  Exceeds {} sigma: {}",
-                args.config.similarity,
-                sim.exceeds_sigma(args.config.similarity)
+                "  Matches: {}",
+                sim.exceeds_sigma(args.config.similarity_exceed)
             );
+            println!("  Similarity: {}", sim.similarity);
+            println!("  MatchExceed: {}", args.config.similarity_exceed);
+            println!(
+                "  Description: \"{}\"",
+                watermark.description.replace("\"", "\\\"")
+            );
+            println!("  File: \"{}\"", PathBuf::from(path).display());
         }
     }
 

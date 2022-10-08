@@ -224,22 +224,32 @@ fn ordering_orthogonal(
     height: usize,
 ) -> OrderingFunction {
     let ortho_scaling = move |index: usize, value: f32| -> f32 {
-        let n = width * height;
         // This k0 scaling should be applied twice on the dc gain of the image, but since we never
         // use that anyway, we don't have to worry about that.
 
         // Scaling for k = 0 in scipy.fftpack.dct ortho scaling.
-        let s_k0 = (1.0 / (4.0 * n as f32)).sqrt();
+        let s_k0_w = (1.0 / (4.0 * width as f32)).sqrt();
+        let s_k0_h = (1.0 / (4.0 * height as f32)).sqrt();
 
         // Scaling for all other coefficients
-        let s = (1.0 / (2.0 * n as f32)).sqrt();
+        let s_w = (1.0 / (2.0 * width as f32)).sqrt();
+        let s_h = (1.0 / (2.0 * height as f32)).sqrt();
 
         // If on first row, it is a k=0 index. Or if on first column, it is also a zero index.
-        if index < width || (index % width) == 0 {
-            s_k0 * value
+        let first_row = index < width;
+        let first_column = (index % width) == 0;
+        let mut scaling = 1.0;
+        if first_row {
+            scaling *= s_k0_w;
         } else {
-            s * value
+            scaling *= s_w;
         }
+        if first_column {
+            scaling *= s_k0_h;
+        } else {
+            scaling *= s_h;
+        }
+        scaling * value
     };
 
     Box::new(

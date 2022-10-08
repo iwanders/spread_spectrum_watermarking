@@ -68,16 +68,19 @@ impl std::ops::Not for Direction {
 }
 
 /// The type of transform to perform.
+#[derive(Eq, PartialEq)]
 pub enum Type {
     /// Type II discrete cosine transform, scaling as per scipy's definition.
     DCT2,
+    /// Type II discrete cosine transform, scaling as per scipy's orthogonal definition.
+    DCT2Ortho,
     /// Type III discrete cosine transform, scaling to be the inverse of DCT2.
     DCT3,
 }
 
 /// Perform a discrete cosine transform of type II.
 /// Data is assumed to be ordered row first and will be overwritten with the result.
-pub fn dct2_2d<T: DctNum + std::ops::Mul>(
+pub fn dct2_2d<T: DctNum + std::ops::Mul + std::convert::From<f32>>(
     planner: &mut rustdct::DctPlanner<T>,
     transform_type: Type,
     width: usize,
@@ -104,6 +107,7 @@ pub fn dct2_2d<T: DctNum + std::ops::Mul>(
     let scaling = match transform_type {
         Type::DCT2 => T::two(),
         Type::DCT3 => T::half(),
+        Type::DCT2Ortho => T::two(),
     };
 
     for current in [first, second] {
@@ -114,6 +118,7 @@ pub fn dct2_2d<T: DctNum + std::ops::Mul>(
         };
         let dct = match transform_type {
             Type::DCT2 => planner.plan_dct2(length),
+            Type::DCT2Ortho => planner.plan_dct2(length),
             Type::DCT3 => planner.plan_dct3(length),
         };
         tmp.resize(length, T::zero());
@@ -134,16 +139,30 @@ pub fn dct2_2d<T: DctNum + std::ops::Mul>(
                     match transform_type {
                         Type::DCT2 => dct.process_dct2_with_scratch(&mut tmp, &mut scratch),
                         Type::DCT3 => dct.process_dct3_with_scratch(&mut tmp, &mut scratch),
+                        Type::DCT2Ortho => dct.process_dct2_with_scratch(&mut tmp, &mut scratch),
                     }
                     // println!("result     -> tmp: {tmp:?}");
 
                     // Copy tmp back into the data, overwriting the original input.
+
                     // Do note we apply scaling by a factor of two here.
                     let row_iter_mut = data.iter_mut().skip(row * width).step_by(1).take(width);
-                    row_iter_mut
-                        .zip(tmp.iter())
-                        .map(|(data_dct, result)| *data_dct = scaling * *result)
-                        .for_each(drop);
+                    if transform_type == Type::DCT2Ortho {
+                        let s0 = <f32 as Into<T>>::into((1.0 / (4.0 * tmp.len() as f32)).sqrt());
+                        let sn = <f32 as Into<T>>::into((1.0 / (2.0 * tmp.len() as f32)).sqrt());
+                        row_iter_mut
+                            .zip(tmp.iter())
+                            .enumerate()
+                            .map(|(i, (data_dct, result))| {
+                                *data_dct = if i == 0 { s0 } else { sn } * scaling * *result
+                            })
+                            .for_each(drop);
+                    } else {
+                        row_iter_mut
+                            .zip(tmp.iter())
+                            .map(|(data_dct, result)| *data_dct = scaling * *result)
+                            .for_each(drop);
+                    }
                 }
             }
 
@@ -158,13 +177,26 @@ pub fn dct2_2d<T: DctNum + std::ops::Mul>(
                     match transform_type {
                         Type::DCT2 => dct.process_dct2_with_scratch(&mut tmp, &mut scratch),
                         Type::DCT3 => dct.process_dct3_with_scratch(&mut tmp, &mut scratch),
+                        Type::DCT2Ortho => dct.process_dct2_with_scratch(&mut tmp, &mut scratch),
                     }
                     // Do note we apply scaling by a factor of two here.
                     let col_iter_mut = data.iter_mut().skip(column).step_by(width).take(height);
-                    col_iter_mut
-                        .zip(tmp.iter())
-                        .map(|(data_dct, result)| *data_dct = scaling * *result)
-                        .for_each(drop);
+                    if transform_type == Type::DCT2Ortho {
+                        let s0 = <f32 as Into<T>>::into((1.0 / (4.0 * tmp.len() as f32)).sqrt());
+                        let sn = <f32 as Into<T>>::into((1.0 / (2.0 * tmp.len() as f32)).sqrt());
+                        col_iter_mut
+                            .zip(tmp.iter())
+                            .enumerate()
+                            .map(|(i, (data_dct, result))| {
+                                *data_dct = if i == 0 { s0 } else { sn } * scaling * *result
+                            })
+                            .for_each(drop);
+                    } else {
+                        col_iter_mut
+                            .zip(tmp.iter())
+                            .map(|(data_dct, result)| *data_dct = scaling * *result)
+                            .for_each(drop);
+                    }
                 }
             }
         }
@@ -172,6 +204,7 @@ pub fn dct2_2d<T: DctNum + std::ops::Mul>(
     }
     match transform_type {
         Type::DCT2 => {}
+        Type::DCT2Ortho => {}
         Type::DCT3 => {
             // Multiply by the correction factor.
             let scaling = T::from_usize(4).unwrap() / T::from_usize(width * height).unwrap();
@@ -353,5 +386,75 @@ mod tests {
 
         dct2_2d(&mut planner, Type::DCT3, WIDTH, HEIGHT, &mut intermediate);
         approx_equal(&intermediate, &input, 0.0001);
+    }
+
+    #[test]
+    fn test_simple_ortho_dct_against_scipy() {
+        /*
+            ident = np.array([[1, 0, 0]])
+            r = scipy.fftpack.dct(ident, norm="ortho")
+            print("ortho row\n", r)
+        */
+        /*
+            Scipy follows for type 2:
+              y_k = 2 \Sum_{n=0}^{N-1} x_n \cos\left(\frac{\pi k \left( 2n + 1 \right)}{2 N}\right)
+
+            Wikipedia does not have that two in front, which seems to be what rustdct does.
+
+            Scaling with ortho means:
+            k=0 gets sqrt(1 / (4N))
+            k=other gets sqrt(1 / (2N))
+
+        */
+
+        let input = [1.0f32, 0.0, 0.0];
+        let expected = [0.57735027f32, 0.70710678, 0.40824829];
+        let mut v_f32 = input.clone();
+
+        let mut planner = DctPlanner::new();
+        let dct = planner.plan_dct2(v_f32.len());
+        dct.process_dct2(&mut v_f32);
+
+        let n = 3.0f32;
+        let k0_s = (1.0 / (4.0 * n)).sqrt();
+        let kn_s = (1.0 / (2.0 * n)).sqrt();
+
+        let mut v_f32 = v_f32.iter().map(|x| x * 2.0).collect::<Vec<f32>>();
+        v_f32[0] *= k0_s;
+        v_f32[1] *= kn_s;
+        v_f32[2] *= kn_s;
+
+        approx_equal(&expected, &v_f32, 0.0001);
+    }
+
+    #[test]
+    fn test_2d_dct_ortho_against_scipy_no_ones() {
+        #[rustfmt::skip]
+        let input = [1.0f32, 0.0, 0.0,
+                     2.0f32, 0.0, 0.0,
+                     0.0f32, 0.0, 3.0];
+        let mut intermediate = input.clone();
+        let mut planner = DctPlanner::new();
+        dct2_2d(&mut planner, Type::DCT2Ortho, 3, 3, &mut intermediate);
+        // println!("{input:?}");
+
+        /*
+        input_values = np.array([[1, 0, 0], [2, 0, 0], [0,0,3]])
+        print(input_values)
+
+        dct = lambda x: scipy.fftpack.dct(x, norm="ortho") #
+        dct_res = dct(dct(input_values).transpose(1, 0)).transpose(0, 1).transpose(1, 0)
+        print("dct_res ortho:", ", ".join(str(v) for v in dct_res.flatten()))
+        */
+        #[rustfmt::skip]
+        let res = [ 2.0, 0.0, 1.4142135623730954,
+                    -0.816496580927726, 2.0, -0.5773502691896258,
+                    0.0, -1.7320508075688774, 0.0f32,];
+        // This now checks the resulting dct.
+        approx_equal(&intermediate, &res, 0.0001);
+
+        // Check whether the inverse works.
+        // dct2_2d(&mut planner, Type::DCT3, 3, 3, &mut intermediate);
+        // approx_equal(&intermediate, &input, 0.0001);
     }
 }

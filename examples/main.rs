@@ -192,29 +192,12 @@ struct CmdTest {
     watermark_files: Vec<String>,
 }
 
-#[derive(Args)]
-struct Legacy {
-    /// The base file to operate on.
-    #[clap(action)]
-    base_file: String,
-
-    /// The derived file to operate on.
-    #[clap(action)]
-    derived_file: String,
-
-    /// Watermark length.
-    #[clap(default_value_t = 1000, value_parser, long)]
-    watermark_length: usize,
-}
-
 #[derive(Subcommand)]
 enum Commands {
     /// Embed a watermark into a file.
     Watermark(CmdWatermark),
     /// Test if any of the watermarks are present in the watermarked file.
     Test(CmdTest),
-    /// Embed a watermark into a file.
-    Legacy(Legacy),
 }
 
 /*
@@ -324,6 +307,31 @@ fn cmd_watermark(args: &CmdWatermark) -> Result<(), Box<dyn std::error::Error>> 
     Ok(())
 }
 
+fn interpret_legacy_watermark(data: &str) -> Result<Version1Storage, Box<dyn std::error::Error>> {
+    #[derive(Serialize, Deserialize)]
+    struct LegacyStorage {
+        alpha: f32,
+        length: usize,
+        version: String,
+        wm: Vec<f32>,
+    }
+    let interior = serde_json::from_str::<LegacyStorage>(&data)?;
+
+    Ok(Version1Storage {
+        config: Configuration {
+            insert_extract: SerializableInsertExtract {
+                alpha: interior.alpha,
+                method: InsertExtractMethod::Option2,
+            },
+            ordering: SerializableOrdering::Legacy,
+        },
+        watermarks: vec![DescribedWatermark {
+            values: (interior.wm[0..]).to_vec(),
+            description: String::from(""),
+        }],
+    })
+}
+
 fn cmd_test(args: &CmdTest) -> Result<(), Box<dyn std::error::Error>> {
     let image_path_base = PathBuf::from(&args.base);
     let image_base = image::open(&image_path_base)
@@ -335,9 +343,16 @@ fn cmd_test(args: &CmdTest) -> Result<(), Box<dyn std::error::Error>> {
     let mut watermarks = vec![];
     for path in args.watermark_files.iter() {
         let contents = std::fs::read_to_string(path)?;
-        let interior = serde_json::from_str::<WatermarkStorage>(&contents)?;
-        let WatermarkStorage::Version1(z) = interior;
-        watermarks.push((path, z));
+
+        // Legacy formats end with .wm, handle those differently.
+        if path.ends_with(".wm") {
+            let storage = interpret_legacy_watermark(&contents)?;
+            watermarks.push((path, storage));
+        } else {
+            let interior = serde_json::from_str::<WatermarkStorage>(&contents)?;
+            let WatermarkStorage::Version1(z) = interior;
+            watermarks.push((path, z));
+        }
     }
 
     // Keep a cache of retrieved watermarks associated with their configuration and length.
@@ -397,35 +412,6 @@ fn cmd_test(args: &CmdTest) -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-fn legacy(base_image_path: &PathBuf, derived_image_path: &PathBuf, watermark_length: usize) {
-    let base_image = image::open(&base_image_path)
-        .unwrap_or_else(|_| panic!("could not load image at {:?}", base_image_path));
-    let derived_image = image::open(&derived_image_path)
-        .unwrap_or_else(|_| panic!("could not load image at {:?}", derived_image_path));
-
-    let mut config = wm::ReadConfig::default();
-
-    config.ordering = wm::OrderingMethod::Legacy;
-    // config.ordering = wm::OrderingMethod::Energy;
-    let reader = wm::Reader::base(base_image, config);
-
-    const DISPLAY: usize = 1000;
-    let indices = &reader.indices()[0..DISPLAY];
-    println!("Reader indices: {indices:?}");
-    let coefficients_by_index: Vec<f32> = indices
-        .iter()
-        .map(|i| reader.coefficients()[*i])
-        .collect::<_>();
-    let coefficients_by_index = &coefficients_by_index[0..DISPLAY];
-    println!("Reader coefficients_by_index: {coefficients_by_index:?}");
-    let derived = wm::Reader::derived(derived_image);
-
-    let mut extracted_mark = vec![0f32; watermark_length + 1];
-    reader.extract(&derived, &mut extracted_mark);
-    let extracted_display = &extracted_mark[0..DISPLAY];
-    println!("Extracted: {extracted_display:?}");
-}
-
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
 
@@ -434,12 +420,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     match &cli.command {
         Some(Commands::Watermark(ref v)) => cmd_watermark(v)?,
         Some(Commands::Test(ref v)) => cmd_test(v)?,
-        Some(Commands::Legacy(v)) => {
-            let base_image_path = PathBuf::from(&v.base_file);
-            let derived_image_path = PathBuf::from(&v.derived_file);
-
-            legacy(&base_image_path, &derived_image_path, v.watermark_length);
-        }
         None => {}
     }
     Ok(())

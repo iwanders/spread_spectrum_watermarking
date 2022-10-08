@@ -125,7 +125,7 @@ cargo r --release --example main -- test /tmp/porcelain_cat_grey_background.jpg 
 ```
 For each suspected watermark this prints information about it being present.
 
-Both subcommands have a lot options for further configuration, use `--help` to see all available options.
+Both subcommands have a lot of options for further configuration, use `--help` to see all available options.
 
 ## License
 License is `BSD-3-Clause`.

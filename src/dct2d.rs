@@ -456,5 +456,31 @@ mod tests {
         // Check whether the inverse works.
         // dct2_2d(&mut planner, Type::DCT3, 3, 3, &mut intermediate);
         // approx_equal(&intermediate, &input, 0.0001);
+        // non square;
+
+        /*
+            print("#" * 40)
+            input_values = np.array([[1, 2, 3, 4], [2, 3, 5, 1], [0,0, 3, 3]])
+            print(input_values)
+
+            dct = lambda x: scipy.fftpack.dct(x, norm="ortho") #
+            dct_res = dct(dct(input_values).transpose(1, 0)).transpose(0, 1).transpose(1, 0)
+            print("dct_res ortho:", ", ".join(str(v) for v in dct_res.flatten()))
+        */
+        #[rustfmt::skip]
+        let input = [1.0f32, 2.0, 3.0, 4.0,
+                     2.0f32, 3.0, 5.0, 1.0,
+                     0.0f32, 0.0, 3.0, 3.0];
+        let mut intermediate = input.clone();
+        let mut planner = DctPlanner::new();
+        dct2_2d(&mut planner, Type::DCT2Ortho, 4, 3, &mut intermediate);
+        // println!("{input:?}");
+
+        #[rustfmt::skip]
+        let res = [7.794228634059947, -2.8232403410227764, -1.4433756729740645, 1.4818841531942584,
+                   1.414213562373095, 0.3826834323650898, 0.0, -0.9238795325112866,
+                  -1.224744871391589, -2.1336083871767086, 2.0412414523193156, -0.8837695307615787];
+        // This now checks the resulting dct.
+        approx_equal(&intermediate, &res, 0.0001);
     }
 }

@@ -379,7 +379,7 @@ fn cmd_test(args: &CmdTest) -> Result<(), Box<dyn std::error::Error>> {
 
                 let reader = wm::Reader::base(image_base.clone(), read_config);
                 let derived = wm::Reader::derived(image_watermarked.clone());
-
+                /*
                 use std::io::prelude::*;
                 let mut file = std::fs::File::create("/tmp/reader_indices.txt")?;
                 for v in reader.indices().iter() {
@@ -388,11 +388,12 @@ fn cmd_test(args: &CmdTest) -> Result<(), Box<dyn std::error::Error>> {
                 println!("reader indices: {:#?}", &reader.indices());
                 println!();
                 println!("reader coeffs: {:?}", &reader.coefficients()[0..100]);
+                */
 
                 let mut extracted_mark = vec![0f32; key.1];
                 reader.extract(&derived, &mut extracted_mark);
                 retrieved.insert(key, extracted_mark);
-                println!("retrieved, len: {}", key.1);
+                // println!("retrieved, len: {}", key.1);
             }
 
             // We got here, so key must be present in the hashmap now.

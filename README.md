@@ -61,6 +61,12 @@ $$\text{sim}\left( X, X^\star \right) = \frac{X^\star\cdot X}{\sqrt{X^\star \cdo
 Which has the convenient properties that $\text{sim}\left(X, X^*\right)$ itself is distributed according to the normal distribution, which means that if this value exceeds several sigma's, it is very likely that the watermark was indeed detected.
 Note that once the watermark is extracted, it can be tested cheaply for similarity between any number of watermarks that are stored and have been used for watermarking in the past.
 
+## Robustness
+Some attacks are performed in the `tests` directory, all against the same cat figurine image.
+
+- Resizing the watermarked image to 12.5% of the original; a 9.85 similarity score.
+- Cropping the cat's head of `225x255` (contains less than 20% of the original pixels); a 8.07 similarity score.
+
 # Usage
 Also take a look at the examples and integration test in addition to the the examples given here.
 

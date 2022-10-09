@@ -73,7 +73,7 @@ pub enum Type {
     /// Type II discrete cosine transform, scaling as per scipy's definition.
     DCT2,
     /// Type II discrete cosine transform, scaling as per scipy's orthogonal definition.
-    DCT2Ortho,
+    DCT2Orthogonal,
     /// Type III discrete cosine transform, scaling to be the inverse of DCT2.
     DCT3,
 }
@@ -107,7 +107,7 @@ pub fn dct2_2d<T: DctNum + std::ops::Mul + std::convert::From<f32>>(
     let scaling = match transform_type {
         Type::DCT2 => T::two(),
         Type::DCT3 => T::half(),
-        Type::DCT2Ortho => T::two(),
+        Type::DCT2Orthogonal => T::two(),
     };
 
     for current in [first, second] {
@@ -118,7 +118,7 @@ pub fn dct2_2d<T: DctNum + std::ops::Mul + std::convert::From<f32>>(
         };
         let dct = match transform_type {
             Type::DCT2 => planner.plan_dct2(length),
-            Type::DCT2Ortho => planner.plan_dct2(length),
+            Type::DCT2Orthogonal => planner.plan_dct2(length),
             Type::DCT3 => planner.plan_dct3(length),
         };
         tmp.resize(length, T::zero());
@@ -139,7 +139,7 @@ pub fn dct2_2d<T: DctNum + std::ops::Mul + std::convert::From<f32>>(
                     match transform_type {
                         Type::DCT2 => dct.process_dct2_with_scratch(&mut tmp, &mut scratch),
                         Type::DCT3 => dct.process_dct3_with_scratch(&mut tmp, &mut scratch),
-                        Type::DCT2Ortho => dct.process_dct2_with_scratch(&mut tmp, &mut scratch),
+                        Type::DCT2Orthogonal => dct.process_dct2_with_scratch(&mut tmp, &mut scratch),
                     }
                     // println!("result     -> tmp: {tmp:?}");
 
@@ -147,7 +147,7 @@ pub fn dct2_2d<T: DctNum + std::ops::Mul + std::convert::From<f32>>(
 
                     // Do note we apply scaling by a factor of two here.
                     let row_iter_mut = data.iter_mut().skip(row * width).step_by(1).take(width);
-                    if transform_type == Type::DCT2Ortho {
+                    if transform_type == Type::DCT2Orthogonal {
                         let s0 = <f32 as Into<T>>::into((1.0 / (4.0 * tmp.len() as f32)).sqrt());
                         let sn = <f32 as Into<T>>::into((1.0 / (2.0 * tmp.len() as f32)).sqrt());
                         row_iter_mut
@@ -177,11 +177,11 @@ pub fn dct2_2d<T: DctNum + std::ops::Mul + std::convert::From<f32>>(
                     match transform_type {
                         Type::DCT2 => dct.process_dct2_with_scratch(&mut tmp, &mut scratch),
                         Type::DCT3 => dct.process_dct3_with_scratch(&mut tmp, &mut scratch),
-                        Type::DCT2Ortho => dct.process_dct2_with_scratch(&mut tmp, &mut scratch),
+                        Type::DCT2Orthogonal => dct.process_dct2_with_scratch(&mut tmp, &mut scratch),
                     }
                     // Do note we apply scaling by a factor of two here.
                     let col_iter_mut = data.iter_mut().skip(column).step_by(width).take(height);
-                    if transform_type == Type::DCT2Ortho {
+                    if transform_type == Type::DCT2Orthogonal {
                         let s0 = <f32 as Into<T>>::into((1.0 / (4.0 * tmp.len() as f32)).sqrt());
                         let sn = <f32 as Into<T>>::into((1.0 / (2.0 * tmp.len() as f32)).sqrt());
                         col_iter_mut
@@ -204,7 +204,7 @@ pub fn dct2_2d<T: DctNum + std::ops::Mul + std::convert::From<f32>>(
     }
     match transform_type {
         Type::DCT2 => {}
-        Type::DCT2Ortho => {}
+        Type::DCT2Orthogonal => {}
         Type::DCT3 => {
             // Multiply by the correction factor.
             let scaling = T::from_usize(4).unwrap() / T::from_usize(width * height).unwrap();
@@ -386,6 +386,40 @@ mod tests {
 
         dct2_2d(&mut planner, Type::DCT3, WIDTH, HEIGHT, &mut intermediate);
         approx_equal(&intermediate, &input, 0.0001);
+
+        // Check the orthogonal result.
+        let mut result_orthogonal = input.clone();
+        let mut planner = DctPlanner::new();
+        dct2_2d(
+            &mut planner,
+            Type::DCT2Orthogonal,
+            WIDTH,
+            HEIGHT,
+            &mut result_orthogonal,
+        );
+        let dct_ortho = [
+            2.600792240550979,
+            -0.0169547836309944,
+            -0.1647810688904923,
+            -0.28819872298503074,
+            0.11199258064349343,
+            0.0494167177431983,
+            0.25584060181116114,
+            0.1776592010578768,
+            0.017379382084804478,
+            -0.4272375691708116,
+            -0.3313785239617557,
+            -0.2809706629576431,
+            -0.24130073087068493,
+            0.6912724752476165,
+            -0.08020450609702295,
+            -0.027672473847564688,
+            0.2873627420009311,
+            -0.14084990093647698,
+            0.03605900198467757,
+            0.5305611424965572,
+        ];
+        approx_equal(&result_orthogonal, &dct_ortho, 0.0001);
     }
 
     #[test]
@@ -435,7 +469,7 @@ mod tests {
                      0.0f32, 0.0, 3.0];
         let mut intermediate = input.clone();
         let mut planner = DctPlanner::new();
-        dct2_2d(&mut planner, Type::DCT2Ortho, 3, 3, &mut intermediate);
+        dct2_2d(&mut planner, Type::DCT2Orthogonal, 3, 3, &mut intermediate);
         // println!("{input:?}");
 
         /*
@@ -473,7 +507,7 @@ mod tests {
                      0.0f32, 0.0, 3.0, 3.0];
         let mut intermediate = input.clone();
         let mut planner = DctPlanner::new();
-        dct2_2d(&mut planner, Type::DCT2Ortho, 4, 3, &mut intermediate);
+        dct2_2d(&mut planner, Type::DCT2Orthogonal, 4, 3, &mut intermediate);
         // println!("{input:?}");
 
         #[rustfmt::skip]

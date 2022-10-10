@@ -66,8 +66,12 @@ pub type OrderingFunction = Box<
 
 /// Insertion method for the watermark.
 pub enum Insertion {
+    /// Option 1 from the paper; x_i' = x_i + alpha * w_i,  alpha as specified.
+    Option1(f32),
     /// Option 2 from the paper; x_i' = x_i (1 + alpha * w_i),  alpha as specified.
     Option2(f32),
+    /// Option 3 from the paper; x_i' = x_i exp(alpha * w_i),  alpha as specified.
+    Option3(f32),
     /// Custom insertion function to be used.
     Custom(InsertFunction),
 }
@@ -75,8 +79,14 @@ pub enum Insertion {
 impl std::fmt::Debug for Insertion {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
         match self {
+            Insertion::Option1(alpha) => {
+                write!(f, "Insertion::Option1({:?})", alpha)
+            }
             Insertion::Option2(alpha) => {
                 write!(f, "Insertion::Option2({:?})", alpha)
+            }
+            Insertion::Option3(alpha) => {
+                write!(f, "Insertion::Option3({:?})", alpha)
             }
             Insertion::Custom(_) => {
                 write!(f, "Insertion::Custom")
@@ -103,8 +113,12 @@ impl Default for WriteConfig {
 
 /// Extraction method for the watermark.
 pub enum Extraction {
+    /// Inverse of option 1 from the paper; x_i' = x_i + alpha * w_i,  alpha as specified.
+    Option1(f32),
     /// Inverse of option 2 from the paper; x_i' = x_i (1 + alpha * w_i),  alpha as specified.
     Option2(f32),
+    /// Inverse of option 3 from the paper; x_i' = x_i exp(alpha * w_i),  alpha as specified.
+    Option3(f32),
     /// Custom extraction function to be used.
     Custom(ExtractFunction),
 }
@@ -280,7 +294,9 @@ impl Writer {
     /// Create a writer, taking a [`image::DynamicImage`] and performing the dct.
     pub fn new(image: image::DynamicImage, config: WriteConfig) -> Self {
         let insert_function = match config.insertion {
+            Insertion::Option1(scaling) => Writer::make_insert_function_1(scaling),
             Insertion::Option2(scaling) => Writer::make_insert_function_2(scaling),
+            Insertion::Option3(scaling) => Writer::make_insert_function_3(scaling),
             Insertion::Custom(v) => v,
         };
 
@@ -393,11 +409,25 @@ impl Writer {
         }
     }
 
+    /// Create the insertion function of type x_i' = x_i + alpha * w_i, with scaling as
+    /// provided.
+    pub fn make_insert_function_1(scaling: f32) -> InsertFunction {
+        Box::new(move |_index, original_value, mark_value| original_value + scaling * mark_value)
+    }
+
     /// Create the insertion function of type x_i' = x_i (1 + alpha * w_i), with scaling as
     /// provided.
     pub fn make_insert_function_2(scaling: f32) -> InsertFunction {
         Box::new(move |_index, original_value, mark_value| {
             original_value * (1.0 + scaling * mark_value)
+        })
+    }
+
+    /// Create the insertion function of type x_i' = x_i exp(alpha * w_i), with scaling as
+    /// provided.
+    pub fn make_insert_function_3(scaling: f32) -> InsertFunction {
+        Box::new(move |_index, original_value, mark_value| {
+            original_value * (scaling * mark_value).exp()
         })
     }
 }
@@ -451,7 +481,9 @@ impl Reader {
         if is_base {
             let config = config.unwrap();
             let extract_function = match config.extraction {
+                Extraction::Option1(scaling) => Reader::make_extract_function_1(scaling),
                 Extraction::Option2(scaling) => Reader::make_extract_function_2(scaling),
+                Extraction::Option3(scaling) => Reader::make_extract_function_3(scaling),
                 Extraction::Custom(v) => v,
             };
             let ordering_function = config
@@ -529,6 +561,16 @@ impl Reader {
         }
     }
 
+    /// Create the extraction function for x_i' = x_i + alpha * w_i, with scaling as
+    /// provided. So that becomes w_i = (x_i' - x_i) / alpha.
+    pub fn make_extract_function_1(scaling: f32) -> ExtractFunction {
+        Box::new(
+            move |_index, original_value_in_base_image, value_in_derived_image| {
+                (value_in_derived_image - original_value_in_base_image) / scaling
+            },
+        )
+    }
+
     /// Create the extraction function for x_i' = x_i (1 + alpha * w_i), with scaling as
     /// provided. So that becomes w_i = (x_i' - x_i) / (x_i * alpha).
     pub fn make_extract_function_2(scaling: f32) -> ExtractFunction {
@@ -536,6 +578,16 @@ impl Reader {
             move |_index, original_value_in_base_image, value_in_derived_image| {
                 (value_in_derived_image - original_value_in_base_image)
                     / (original_value_in_base_image * scaling)
+            },
+        )
+    }
+
+    /// Create the extraction function for x_i' = x_i exp(alpha * w_i), with scaling as
+    /// provided. So that becomes w_i = ln(x_i' / x_i) / (alpha).
+    pub fn make_extract_function_3(scaling: f32) -> ExtractFunction {
+        Box::new(
+            move |_index, original_value_in_base_image, value_in_derived_image| {
+                (value_in_derived_image / original_value_in_base_image).ln() / scaling
             },
         )
     }
@@ -667,12 +719,49 @@ impl<'a> Tester<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::util::approx_equal;
 
     #[test]
     fn test_indices() {
         let coefficients = [-3f32, 5.0, -8.0, 7.0, 1.0, 2.0];
         let indices = obtain_indices_by_energy(&coefficients);
         assert_eq!(indices, &[2, 3, 1, 5, 4]);
+    }
+
+    #[test]
+    fn test_insert_extract_functions() {
+        fn test_thing(insert: InsertFunction, extract: ExtractFunction) {
+            let coefficients = [-3f32, 5.0, -8.0, 7.0, 1.0, 2.0];
+            let mark1_data = [1.0f32, -0.5, 1.0, 0.5, 0.5, 0.1];
+            let mut embedded = coefficients.clone();
+            let embedded = embedded
+                .iter_mut()
+                .enumerate()
+                .map(|(i, orig)| insert(i, *orig, mark1_data[i]))
+                .collect::<Vec<f32>>();
+            let extracted = embedded
+                .iter()
+                .enumerate()
+                .map(|(i, xapos)| extract(i, coefficients[i], *xapos))
+                .collect::<Vec<f32>>();
+            approx_equal(&mark1_data, &extracted, 0.001);
+        }
+
+        {
+            let insert_function = Writer::make_insert_function_1(0.1);
+            let extract_function = Reader::make_extract_function_1(0.1);
+            test_thing(insert_function, extract_function);
+        }
+        {
+            let insert_function = Writer::make_insert_function_2(0.1);
+            let extract_function = Reader::make_extract_function_2(0.1);
+            test_thing(insert_function, extract_function);
+        }
+        {
+            let insert_function = Writer::make_insert_function_3(0.1);
+            let extract_function = Reader::make_extract_function_3(0.1);
+            test_thing(insert_function, extract_function);
+        }
     }
 
     #[test]

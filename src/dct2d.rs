@@ -121,6 +121,7 @@ pub fn dct2_2d<T: DctNum + std::ops::Mul + std::convert::From<f32>>(
             Type::DCT2Orthogonal => planner.plan_dct2(length),
             Type::DCT3 => planner.plan_dct3(length),
         };
+
         tmp.resize(length, T::zero());
         scratch.resize(dct.get_scratch_len(), T::zero());
 
@@ -139,7 +140,9 @@ pub fn dct2_2d<T: DctNum + std::ops::Mul + std::convert::From<f32>>(
                     match transform_type {
                         Type::DCT2 => dct.process_dct2_with_scratch(&mut tmp, &mut scratch),
                         Type::DCT3 => dct.process_dct3_with_scratch(&mut tmp, &mut scratch),
-                        Type::DCT2Orthogonal => dct.process_dct2_with_scratch(&mut tmp, &mut scratch),
+                        Type::DCT2Orthogonal => {
+                            dct.process_dct2_with_scratch(&mut tmp, &mut scratch)
+                        }
                     }
                     // println!("result     -> tmp: {tmp:?}");
 
@@ -177,7 +180,9 @@ pub fn dct2_2d<T: DctNum + std::ops::Mul + std::convert::From<f32>>(
                     match transform_type {
                         Type::DCT2 => dct.process_dct2_with_scratch(&mut tmp, &mut scratch),
                         Type::DCT3 => dct.process_dct3_with_scratch(&mut tmp, &mut scratch),
-                        Type::DCT2Orthogonal => dct.process_dct2_with_scratch(&mut tmp, &mut scratch),
+                        Type::DCT2Orthogonal => {
+                            dct.process_dct2_with_scratch(&mut tmp, &mut scratch)
+                        }
                     }
                     // Do note we apply scaling by a factor of two here.
                     let col_iter_mut = data.iter_mut().skip(column).step_by(width).take(height);

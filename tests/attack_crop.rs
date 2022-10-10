@@ -4,7 +4,7 @@ mod util;
 use util::generate_fixed_normal_sequence;
 
 #[test]
-fn embed_extract_test() {
+fn test_attack_crop() {
     // ================ Start of embedding section. ================
 
     // Load the image.

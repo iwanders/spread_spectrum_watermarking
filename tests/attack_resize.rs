@@ -3,7 +3,7 @@ mod util;
 use util::generate_fixed_normal_sequence;
 
 #[test]
-fn embed_extract_test() {
+fn test_attack_resize() {
     // ================ Start of embedding section. ================
 
     let embedded_mark = generate_fixed_normal_sequence(2, 1000);

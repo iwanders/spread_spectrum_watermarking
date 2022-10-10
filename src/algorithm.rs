@@ -604,8 +604,6 @@ pub trait Mark {
 /// The paper recommends using a 0 mean sigma^2 = 1 standard distribution to determine the sequence
 /// to be embedded.
 /// See paper section IV-D as to why using a binary signal is vulnerable to multi document attacks.
-#[cfg_attr(feature = "dep:serde", derive(serde::Serialize))]
-#[cfg_attr(feature = "dep:serde", derive(serde::Deserialize))]
 #[derive(Clone, Debug, Default)]
 pub struct MarkBuf {
     data: Vec<f32>,

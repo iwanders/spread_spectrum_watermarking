@@ -40,14 +40,20 @@ impl std::fmt::Display for SerializableOrdering {
 
 #[derive(Debug, Clone, Copy, clap::ValueEnum, Serialize, Deserialize, PartialEq, Hash, Eq)]
 enum InsertExtractMethod {
+    /// Option 1 from the paper; x_i' = x_i + alpha * w_i,  alpha as specified.
+    Option1,
     /// Option 2 from the paper; x_i' = x_i (1 + alpha * w_i),  alpha as specified.
     Option2,
+    /// Option 3 from the paper; x_i' = x_i exp(alpha * w_i),  alpha as specified.
+    Option3,
 }
 
 impl std::fmt::Display for InsertExtractMethod {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
         match *self {
+            InsertExtractMethod::Option1 => write!(f, "option1")?,
             InsertExtractMethod::Option2 => write!(f, "option2")?,
+            InsertExtractMethod::Option3 => write!(f, "option3")?,
         }
         Ok(())
     }
@@ -55,7 +61,8 @@ impl std::fmt::Display for InsertExtractMethod {
 
 #[derive(Serialize, Deserialize, Debug, Args, Clone, Copy, PartialEq)]
 struct SerializableInsertExtract {
-    /// Strength, alpha in the equations.
+    /// Strength, alpha in the equations. For option one this is not a relative scaling but an
+    /// absolute one, so scale appropriately.
     #[clap(default_value_t = 0.1, value_parser, long)]
     alpha: f32,
     /// Method to insert and extract with.
@@ -86,12 +93,16 @@ impl std::fmt::Display for SerializableInsertExtract {
 impl SerializableInsertExtract {
     pub fn to_insertion(&self) -> wm::Insertion {
         match self.method {
+            InsertExtractMethod::Option1 => wm::Insertion::Option1(self.alpha),
             InsertExtractMethod::Option2 => wm::Insertion::Option2(self.alpha),
+            InsertExtractMethod::Option3 => wm::Insertion::Option3(self.alpha),
         }
     }
     pub fn to_extraction(&self) -> wm::Extraction {
         match self.method {
+            InsertExtractMethod::Option1 => wm::Extraction::Option1(self.alpha),
             InsertExtractMethod::Option2 => wm::Extraction::Option2(self.alpha),
+            InsertExtractMethod::Option3 => wm::Extraction::Option3(self.alpha),
         }
     }
 }
